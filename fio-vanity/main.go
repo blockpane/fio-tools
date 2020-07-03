@@ -54,7 +54,7 @@ func main() {
 		}
 	}()
 
-	keyChan := make(chan *key)
+	keyChan := make(chan *key, 2*o.threads)
 	go func() {
 		for {
 			select {
