@@ -22,7 +22,7 @@ Using the `-out` argument will generate a .csv file containing all pending FIO r
 
 ```csv
 "request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"
-"123","me@mydomain","FIO6QtJu52ho38zRP4aZCcgtciLAWQUB3CBgXnmwfFfXi6LvfVYyj","you@yourdomain","FIO5NMm9Vf3NjYFnhoc7yxTCrLW963KPUCzeMGv3SJ6zR3GMez4ub","18eYGo7posG4YyKj3yYw5WtQRtLJoCm1H7","0.001000","BTC","BTC","I need money",""
+"123","me@mydomain","FIO6QtJu52ho38zRP4aZCcgtciLAWQUB3CBgXnmwfFfXi6LvfVYyj","you@yourdomain","FIO5NMm9Vf3NjYFnhoc7yxTCrLW963KPUCzeMGv3SJ6zR3GMez4ub","18eYGo7posG4YyKj3yYw5WtQRtLJoCm1H7","0.001000","BTC","BTC","I need money","",""
 ```
 
 ## bulk reject

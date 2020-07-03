@@ -134,7 +134,7 @@ More:
 				continue
 			}
 			s := fmt.Sprintf(
-				`"%d",%q,%q,%q,%q,%q,%q,%q,%q,%q,%q`+"\n",
+				`"%d",%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q`+"\n",
 				req.FioRequestId,
 				req.PayerFioAddress,
 				req.PayerFioPublicKey,
@@ -145,6 +145,7 @@ More:
 				content.Request.ChainCode,
 				content.Request.TokenCode,
 				content.Request.Memo,
+				content.Request.Hash,
 				content.Request.OfflineUrl,
 			)
 			if verbose {
