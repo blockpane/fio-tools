@@ -186,7 +186,7 @@ func options() {
 	if privKey == "" {
 		reader := bufio.NewReader(os.Stdin)
 		b, _, err := reader.ReadLine()
-		fmt.Println("")
+		fmt.Print("please enter the private key: ")
 		if err != nil {
 			log.Fatal(err)
 		}
