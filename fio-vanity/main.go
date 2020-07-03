@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
 	ecc "github.com/fioprotocol/fio-go/imports/eos-fio/fecc"
 	"github.com/mr-tron/base58"
 	"golang.org/x/text/language"
@@ -25,8 +26,10 @@ import (
 	"time"
 )
 
+var o *Options
+
 func main() {
-	o := opts()
+	o = opts()
 
 	printChan := make(chan string)
 	found := func(k *key) {
@@ -61,12 +64,12 @@ func main() {
 					switch o.anywhere {
 					case false:
 						if o.actor {
-							if strings.HasPrefix(k.actor, o.word) {
+							if k.i64 == o.i64 {
 								hit = true
 							}
 							if o.leet {
-								for _, m := range o.words {
-									if strings.HasPrefix(k.actor, m) {
+								for _, m := range o.i64s {
+									if k.i64 == m {
 										hit = true
 									}
 								}
@@ -131,6 +134,7 @@ func main() {
 
 type key struct {
 	actor string
+	i64   uint64
 	pub   string
 	priv  string
 }
@@ -138,29 +142,30 @@ type key struct {
 func newRandomAccount() *key {
 	priv, _ := ecc.NewRandomPrivateKey()
 	pub := priv.PublicKey().String()
-	actor, _ := actorFromPub(pub)
+	actor, i64, _ := actorFromPub(pub, len(o.word))
 	return &key{
 		actor: actor,
+		i64:   i64,
 		pub:   pub,
 		priv:  priv.String(),
 	}
 }
 
 // ActorFromPub calculates the FIO Actor (EOS Account) from a public key
-func actorFromPub(pubKey string) (string, error) {
+func actorFromPub(pubKey string, matchBytes int) (string, uint64, error) {
 	const actorKey = `.12345abcdefghijklmnopqrstuvwxyz`
 	if len(pubKey) != 53 {
-		return "", errors.New("public key should be 53 chars")
+		return "", 0, errors.New("public key should be 53 chars")
 	}
 	decoded, err := base58.Decode(pubKey[3:])
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	var result uint64
 	i := 1
 	for found := 0; found <= 12; i++ {
 		if i > 32 {
-			return "", errors.New("key has more than 20 bytes with trailing zeros")
+			return "", 0, errors.New("key has more than 20 bytes with trailing zeros")
 		}
 		var n uint64
 		if found == 12 {
@@ -181,17 +186,20 @@ func actorFromPub(pubKey string) (string, error) {
 		actor[12-i] = actorKey[result&uint64(0x1f)]
 		result = result >> 5
 	}
-	return string(actor[:12]), nil
+	i64, _ := eos.StringToName(string(actor[:matchBytes]))
+	return string(actor[:12]), i64, nil
 }
 
 type Options struct {
 	anywhere bool
 	word     string
+	i64      uint64
 	actor    bool
 	pub      bool
 	leet     bool
 	threads  int
 	words    []string
+	i64s     []uint64
 }
 
 func opts() *Options {
@@ -234,6 +242,10 @@ func opts() *Options {
 		for k := range leets {
 			o.words = append(o.words, k)
 		}
+		o.i64s = make([]uint64, len(o.words))
+		for i := range o.words {
+			o.i64s[i], _ = eos.StringToName(o.words[i])
+		}
 		fmt.Println(o.words)
 	}
 	sort.Strings(o.words)
@@ -243,6 +255,7 @@ func opts() *Options {
 		fmt.Println("\nValid search characters are: 12345abcdefghijklmnopqrstuvwxyz")
 		os.Exit(1)
 	}
+	o.i64, _ = eos.StringToName(o.word)
 	return o
 }
 
