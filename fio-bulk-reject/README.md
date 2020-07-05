@@ -6,7 +6,7 @@ request IDs.
 ## options
 
 ```
-  -h string
+  -u string
     	FIO API endpoint to use (default "https://testnet.fioprotocol.io")
   -in string
     	file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq

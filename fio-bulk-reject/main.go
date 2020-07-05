@@ -372,7 +372,7 @@ func options() {
 	flag.StringVar(&privKey, "k", "", "private key in WIF format, if absent will prompt")
 	flag.StringVar(&inFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
 	flag.StringVar(&outFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
-	flag.StringVar(&nodeos, "h", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
+	flag.StringVar(&nodeos, "u", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
 	flag.Parse()
 
 	switch true {
