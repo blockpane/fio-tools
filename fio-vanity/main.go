@@ -11,7 +11,6 @@ package main
 */
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
@@ -43,78 +42,85 @@ func main() {
 		var counter uint64
 		for {
 			select {
-			case <-t.C:
-				pp.Printf("rate: %d KPS\n", counter/30)
-				counter = 0
-			case p := <-printChan:
-				fmt.Println(p)
 			case <-statsChan:
 				counter += 1
-			}
+			case p := <-printChan:
+				fmt.Println(p)
+			case <-t.C:
+				pp.Printf("rate: %d KPS\n", counter/30)
+				counter = 0}
 		}
 	}()
 
 	keyChan := make(chan *key, 2*o.threads)
 	go func() {
+		k := &key{}
 		for {
 			select {
-			case k := <-keyChan:
+			case k = <-keyChan:
+				if k.i64 == 0 {
+					continue
+				}
 				go func(k *key) {
-					var hit bool
 					switch o.anywhere {
 					case false:
 						if o.actor {
 							if k.i64 == o.i64 {
-								hit = true
+								found(k)
+								return
 							}
 							if o.leet {
 								for _, m := range o.i64s {
 									if k.i64 == m {
-										hit = true
+										found(k)
+										return
 									}
 								}
 							}
 						}
 						if o.pub {
 							if strings.HasPrefix(strings.ToLower(k.pub[4:]), o.word) {
-								hit = true
+								found(k)
+								return
 							}
 							if o.leet {
 								for _, m := range o.words {
 									if strings.HasPrefix(strings.ToLower(k.pub[4:]), m) {
-										hit = true
+										found(k)
+										return
 									}
 								}
 							}
 						}
-					case true:
+					default:
 						if o.actor {
 							if strings.Contains(k.actor, o.word) {
-								hit = true
+								found(k)
+								return
 							}
 							if o.leet {
 								for _, m := range o.words {
 									if strings.Contains(k.actor, m) {
-										hit = true
+										found(k)
+										return
 									}
 								}
 							}
 						}
 						if o.pub {
 							if strings.Contains(strings.ToLower(k.pub[4:]), strings.ToLower(o.word)) {
-								hit = true
+								found(k)
+								return
 							}
 						}
 						if o.leet {
 							for _, m := range o.words {
 								if strings.Contains(strings.ToLower(k.pub[4:]), m) {
-									hit = true
+									found(k)
+									return
 								}
 							}
 						}
-					}
-					if hit {
-						found(k)
 					}
 				}(k)
 			}
@@ -141,31 +147,23 @@ type key struct {
 
 func newRandomAccount() *key {
 	priv, _ := ecc.NewRandomPrivateKey()
-	pub := priv.PublicKey().String()
-	actor, i64, _ := actorFromPub(pub, len(o.word))
-	return &key{
-		actor: actor,
-		i64:   i64,
-		pub:   pub,
+	k := &key{
+		pub:   priv.PublicKey().String(),
 		priv:  priv.String(),
 	}
+	k.actor, k.i64 = actorFromPub(k.pub, len(o.word))
+	return k
 }
 
 // ActorFromPub calculates the FIO Actor (EOS Account) from a public key
-func actorFromPub(pubKey string, matchBytes int) (string, uint64, error) {
+func actorFromPub(pubKey string, matchBytes int) (string, uint64) {
 	const actorKey = `.12345abcdefghijklmnopqrstuvwxyz`
-	if len(pubKey) != 53 {
-		return "", 0, errors.New("public key should be 53 chars")
-	}
-	decoded, err := base58.Decode(pubKey[3:])
-	if err != nil {
-		return "", 0, err
-	}
+	decoded, _ := base58.Decode(pubKey[3:])
 	var result uint64
 	i := 1
 	for found := 0; found <= 12; i++ {
 		if i > 32 {
-			return "", 0, errors.New("key has more than 20 bytes with trailing zeros")
+			return "", 0
 		}
 		var n uint64
 		if found == 12 {
@@ -187,7 +185,7 @@ func actorFromPub(pubKey string, matchBytes int) (string, uint64, error) {
 		result = result >> 5
 	}
 	i64, _ := eos.StringToName(string(actor[:matchBytes]))
-	return string(actor[:12]), i64, nil
+	return string(actor[:12]), i64
 }
 
 type Options struct {
@@ -239,6 +237,7 @@ func opts() *Options {
 		for k := range leets {
 			sub(k)
 		}
+		delete(leets, o.word)
 		for k := range leets {
 			o.words = append(o.words, k)
 		}
