@@ -5,6 +5,9 @@
 For FIO, works for account or pubkey. CPU only, can generate around 100k keys/per second on an circa 2018 i9 laptop,
 slightly better on a desktop computer. Searches for six or more characters can take a *very* long time.
 
+Note: searching for a string anchored at the beginning of the account/actor (the default setting) will be significantly faster
+because this method uses integer matching, others (`-a`, `-p`, `-actor=false`) rely on string searches and will take >30% longer.
+
 ```
       $ fio-vanity ninja
         ninja5fdxaox,FIO5mGka1tCsbXGXspWgZUCcj2E7CCfANgyRr1ok2T7AMkxspNamz,5JGpwmi8Fib77ACV8utUdBiRpcrHxyaxznaHax4J9xnB6ziiLu1
