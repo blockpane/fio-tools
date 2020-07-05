@@ -35,6 +35,69 @@ func main() {
 		printChan <- fmt.Sprintf("%s,%s,%s", k.actor, k.pub, k.priv)
 	}
 
+	match := func(k *key) {
+		switch o.anywhere {
+		case false:
+			if o.actor {
+				if k.i64 == o.i64 {
+					found(k)
+					return
+				}
+				if o.leet {
+					for _, m := range o.i64s {
+						if k.i64 == m {
+							found(k)
+							return
+						}
+					}
+				}
+			}
+			if o.pub {
+				if strings.HasPrefix(strings.ToLower(k.pub[4:]), o.word) {
+					found(k)
+					return
+				}
+				if o.leet {
+					for _, m := range o.words {
+						if strings.HasPrefix(strings.ToLower(k.pub[4:]), m) {
+							found(k)
+							return
+						}
+					}
+				}
+			}
+		default:
+			if o.actor {
+				if strings.Contains(k.actor, o.word) {
+					found(k)
+					return
+				}
+				if o.leet {
+					for _, m := range o.words {
+						if strings.Contains(k.actor, m) {
+							found(k)
+							return
+						}
+					}
+				}
+			}
+			if o.pub {
+				if strings.Contains(strings.ToLower(k.pub[4:]), strings.ToLower(o.word)) {
+					found(k)
+					return
+				}
+			}
+			if o.leet {
+				for _, m := range o.words {
+					if strings.Contains(strings.ToLower(k.pub[4:]), m) {
+						found(k)
+						return
+					}
+				}
+			}
+		}
+	}
+
 	statsChan := make(chan bool)
 	go func() {
 		pp := message.NewPrinter(language.AmericanEnglish)
@@ -62,68 +125,7 @@ func main() {
 				if k.i64 == 0 {
 					continue
 				}
-				go func(k *key) {
-					switch o.anywhere {
-					case false:
-						if o.actor {
-							if k.i64 == o.i64 {
-								found(k)
-								return
-							}
-							if o.leet {
-								for _, m := range o.i64s {
-									if k.i64 == m {
-										found(k)
-										return
-									}
-								}
-							}
-						}
-						if o.pub {
-							if strings.HasPrefix(strings.ToLower(k.pub[4:]), o.word) {
-								found(k)
-								return
-							}
-							if o.leet {
-								for _, m := range o.words {
-									if strings.HasPrefix(strings.ToLower(k.pub[4:]), m) {
-										found(k)
-										return
-									}
-								}
-							}
-						}
-					default:
-						if o.actor {
-							if strings.Contains(k.actor, o.word) {
-								found(k)
-								return
-							}
-							if o.leet {
-								for _, m := range o.words {
-									if strings.Contains(k.actor, m) {
-										found(k)
-										return
-									}
-								}
-							}
-						}
-						if o.pub {
-							if strings.Contains(strings.ToLower(k.pub[4:]), strings.ToLower(o.word)) {
-								found(k)
-								return
-							}
-						}
-						if o.leet {
-							for _, m := range o.words {
-								if strings.Contains(strings.ToLower(k.pub[4:]), m) {
-									found(k)
-									return
-								}
-							}
-						}
-					}
-				}(k)
+				go match(k)
 			}
 		}
 	}()
