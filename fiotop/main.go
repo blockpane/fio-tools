@@ -33,7 +33,7 @@ func main() {
 	flag.Parse()
 	Url = *url
 	if !strings.HasPrefix(Url, "http") {
-		Url = "http://"+Url
+		Url = "http://" + Url
 	}
 
 	var currentProducer eos.AccountName

@@ -184,7 +184,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 			Table:      "fioreqctxts",
 			LowerBound: h,
 			UpperBound: h,
-			Limit:      uint32(upper[0].FioRequestId - lower[0].FioRequestId)+1,
+			Limit:      uint32(upper[0].FioRequestId-lower[0].FioRequestId) + 1,
 			KeyType:    "i128",
 			Index:      "2",
 			JSON:       true,

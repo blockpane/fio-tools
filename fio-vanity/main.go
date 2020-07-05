@@ -48,7 +48,8 @@ func main() {
 				fmt.Println(p)
 			case <-t.C:
 				pp.Printf("rate: %d KPS\n", counter/30)
-				counter = 0}
+				counter = 0
+			}
 		}
 	}()
 
@@ -148,8 +149,8 @@ type key struct {
 func newRandomAccount() *key {
 	priv, _ := ecc.NewRandomPrivateKey()
 	k := &key{
-		pub:   priv.PublicKey().String(),
-		priv:  priv.String(),
+		pub:  priv.PublicKey().String(),
+		priv: priv.String(),
 	}
 	k.actor, k.i64 = actorFromPub(k.pub, len(o.word))
 	return k
@@ -257,4 +258,3 @@ func opts() *Options {
 	o.i64, _ = eos.StringToName(o.word)
 	return o
 }
-
