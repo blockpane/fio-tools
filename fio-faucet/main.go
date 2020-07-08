@@ -24,7 +24,7 @@ func main() {
 	flag.StringVar(&url, "u", "http://127.0.0.1:8888", "url for nodeos api")
 	flag.StringVar(&allow, "allow", "", "list of authorized pubkeys, comma seperated")
 	flag.StringVar(&faucet, "k", "", "key for faucet")
-	flag.Uint64Var(&max, "m", 10000000000000, "Max amount that can be sent (default: 10,000 FIO)")
+	flag.Uint64Var(&max, "m", 10000000000000, "Max amount that can be sent in SUF, 1_000_000_000 = ᵮ1.0")
 	flag.Parse()
 
 	envUrl := os.Getenv("URL")
