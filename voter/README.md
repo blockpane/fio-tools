@@ -1,10 +1,12 @@
 # fio-vote
 
 This is an automated voting tool that ranks producers based upon criteria (that can be validated on-chain) in the
-[BP Code of Conduct](https://developers.fioprotocol.io/fio-chain/bp#code-of-conduct).
+[BP Code of Conduct](https://developers.fioprotocol.io/fio-chain/bp#code-of-conduct). The goal is to reward producers
+that actively contribute to keeping the chain healthy, therefore actions like participating in proposals for setcode,
+and performing fee maintenance are strongly favored. Sending requests that should be seen frequently are also rewarded.
 
 It allows setting the number of producers to vote for, how often to recalculate votes, allows using a linked-auth key
-(highly recommended!), and can restrict to only include a list of allowed producers. It will check every two minutes for
+(highly recommended!), and can restrict to only include a list of allowed producers. It will check every minute for
 producers missing (full) rounds, and retracts their votes. It will not vote for them again for three times the
 vote calculation frequency (3 days by default.)
 
@@ -36,13 +38,13 @@ vote calculation frequency (3 days by default.)
 ## Scoring Criteria:
 
 ```
-participation in msig (propose, approve, exec) - 3 points each, last 30 days
-fee votes (bundlevote, setfeevote, setfeemult) - 2 points each, last 30 days
-maintenance (bpclaim, tpidclaim, burnexpired)  - 1 point each, last 24 hours
+participation in msig (propose, approve, exec) + 3 points each, last 30 days
+fee votes (bundlevote, setfeevote, setfeemult) + 2 points each, last 30 days
+maintenance (bpclaim, tpidclaim, burnexpired)  + 1 point each, last 24 hours
 
-url in producers table is reachable            - 1 point
-url has a bp.json or chain json                - 1 point
-permissive CORS for bp.json                    - 1 point
+url in producers table is reachable            + 1 point
+url has a bp.json or chain json                + 1 point
+permissive CORS for bp.json                    + 1 point
 
 Penalties:
 ----------
