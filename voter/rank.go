@@ -66,7 +66,7 @@ func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]s
 	})
 
 	// save out a copy of rankings
-	func(){
+	func() {
 		r := make([]*BpRank, len(eligible))
 		for i, bpr := range eligible {
 			r[i] = bps[bpr]
@@ -208,7 +208,7 @@ func (bp *BpRank) getHistory(api *fio.API) error {
 			break
 		}
 		for i := len(at.Actions) - 1; i >= 0; i-- {
-			if at.Actions[i].BlockTime.Before(time.Now().Add(-time.Duration(24*30)*time.Hour)) {
+			if at.Actions[i].BlockTime.Before(time.Now().Add(-time.Duration(24*30) * time.Hour)) {
 				break
 			}
 			//if at.Actions[i].Trace.Action == nil || at.Actions[i].Trace.Action.Authorization == nil || dups[at.Actions[i].Trace.TransactionID.String()] {
@@ -273,18 +273,18 @@ func CpuRanking(api *fio.API) (map[string]int, error) {
 		return nil, err
 	}
 	//through := gi.HeadBlockNum - uint32(60 * 60 * 2) // get CPU stats for last hour
-	through := gi.HeadBlockNum - uint32(60 * 60 * 2 * 2) // get CPU stats for last hour
+	through := gi.HeadBlockNum - uint32(60*60*2*2) // get CPU stats for last hour
 
 	type prods struct {
-		Owner string `json:"owner"`
+		Owner      string `json:"owner"`
 		FioAddress string `json:"fio_address"`
 	}
 	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
-		Code:       "eosio",
-		Scope:      "eosio",
-		Table:      "producers",
-		Limit:      500,
-		JSON:       true,
+		Code:  "eosio",
+		Scope: "eosio",
+		Table: "producers",
+		Limit: 500,
+		JSON:  true,
 	})
 	if err != nil {
 		return nil, err
@@ -309,7 +309,7 @@ func CpuRanking(api *fio.API) (map[string]int, error) {
 		if err != nil || gbt == nil || len(gbt.Ids) == 0 {
 			continue
 		}
-		time.Sleep(10*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		gb, err := api.GetBlockByNum(i)
 		if err != nil {
 			log.Println(err)

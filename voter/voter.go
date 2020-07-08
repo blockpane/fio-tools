@@ -54,7 +54,7 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 	if err != nil {
 		return err
 	}
-	if gi.HeadBlockTime.Before(time.Now().Add(-10*time.Minute)) {
+	if gi.HeadBlockTime.Before(time.Now().Add(-10 * time.Minute)) {
 		if V {
 			log.Println("aborting vote, chain is > 10 minutes behind on server")
 			j, _ := json.MarshalIndent(gi, "", "  ")
@@ -115,7 +115,7 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 			break
 		}
 		log.Println(err)
-		time.Sleep(6*time.Second)
+		time.Sleep(6 * time.Second)
 	}
 	if V {
 		log.Println("voted for ", eligible[:votes])
@@ -124,8 +124,8 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 	}
 	if resp != nil && err == nil {
 		MissedAfter = time.Now().Add(12 * time.Minute)
-		go func(){
-			last, err := os.OpenFile(".last-vote", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600 )
+		go func() {
+			last, err := os.OpenFile(".last-vote", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 			if err != nil {
 				if V {
 					log.Println(err)
@@ -319,10 +319,10 @@ func getEligible(api *fio.API) ([]string, error) {
 
 // only what we need.
 type ProducerCompact struct {
-	FioAddress string `json:"fio_address"`
-	Url string `json:"url"`
-	LastClaimTime eos.JSONTime `json:"last_claim_time"`
-	ProducerPublicKey string `json:"producer_public_key"`
+	FioAddress        string       `json:"fio_address"`
+	Url               string       `json:"url"`
+	LastClaimTime     eos.JSONTime `json:"last_claim_time"`
+	ProducerPublicKey string       `json:"producer_public_key"`
 }
 
 func GetProducerCompact(acc eos.AccountName, api *fio.API) (addr string, pc *ProducerCompact, err error) {

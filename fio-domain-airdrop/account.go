@@ -18,19 +18,19 @@ var doNotDrop = map[string]bool{
 
 type Recipient struct {
 	Account string
-	PubKey string
-	Amount uint64
+	PubKey  string
+	Amount  uint64
 
-	Attempt int
-	Success bool
-	TxId string
+	Attempt   int
+	Success   bool
+	TxId      string
 	Confirmed bool
-	BlockNum uint32
+	BlockNum  uint32
 }
 
 type domOwner struct {
-	Account string `json:"account"`
-	Expiration int64 `json:"expiration"`
+	Account    string `json:"account"`
+	Expiration int64  `json:"expiration"`
 }
 
 // GetAccountCounts looks at the fio.address domains table and returns a list of recipients, and the total FIO required
@@ -50,7 +50,7 @@ func GetRecips(api *fio.API, tokens float64) ([]*Recipient, uint64, error) {
 	gtr := &eos.GetTableRowsResp{}
 
 	log.Println("mapping accounts owning a domain")
-	for i:=0; true ;i+=100 {
+	for i := 0; true; i += 100 {
 		request.LowerBound = strconv.Itoa(i)
 		gtr, err = api.GetTableRows(request)
 		if err != nil {
@@ -83,7 +83,7 @@ func GetRecips(api *fio.API, tokens float64) ([]*Recipient, uint64, error) {
 	for k, v := range owners {
 		recip := &Recipient{
 			Account: k,
-			Amount:  fio.Tokens(tokens*float64(v)),
+			Amount:  fio.Tokens(tokens * float64(v)),
 		}
 		err = recip.GetPubKey(api)
 		if err != nil {
@@ -122,7 +122,7 @@ func (ar *Recipient) GetPubKey(api *fio.API) error {
 		return err
 	}
 	if keys == nil || len(keys) == 0 {
-		return errors.New("did not find public key for "+ar.Account)
+		return errors.New("did not find public key for " + ar.Account)
 	}
 	na, err := fio.ActorFromPub(keys[0].Clientkey)
 	if err != nil {
@@ -134,5 +134,3 @@ func (ar *Recipient) GetPubKey(api *fio.API) error {
 	ar.PubKey = keys[0].Clientkey
 	return nil
 }
-
-

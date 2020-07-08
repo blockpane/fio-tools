@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Lshortfile|log.LstdFlags)
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
 	flag.StringVar(&voter.Url, "u", "", "url for connect")
 	flag.StringVar(&voter.Perm, "p", "", "permission, if not using 'active'")
@@ -152,7 +152,7 @@ func main() {
 					log.Println(err)
 				}
 			}
-		case <- cpuTick.C:
+		case <-cpuTick.C:
 			mux.Lock()
 			if voter.V {
 				log.Println("ranking producers CPU performance")
@@ -176,4 +176,3 @@ func main() {
 		}
 	}
 }
-

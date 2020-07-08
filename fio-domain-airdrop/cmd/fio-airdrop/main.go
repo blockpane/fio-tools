@@ -63,7 +63,7 @@ func main() {
 		<-sigc
 		close(abort)
 		// shouldn't be needed, but ensures no zombies if SendAllTokens doesn't return
-		time.Sleep(3*time.Second)
+		time.Sleep(3 * time.Second)
 		os.Exit(1)
 	}()
 
@@ -86,4 +86,3 @@ func main() {
 	fmt.Print("No '-out' option provided for .CSV report, dumping to stdout:\n\n")
 	fmt.Println(report)
 }
-

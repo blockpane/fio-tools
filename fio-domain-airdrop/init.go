@@ -17,7 +17,7 @@ func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmsgprefix)
 }
 
-func Setup() (acc *fio.Account, api *fio.API, tokens float64, reportFile *os.File, dryRun bool){
+func Setup() (acc *fio.Account, api *fio.API, tokens float64, reportFile *os.File, dryRun bool) {
 	var err error
 	var nodeos, privKey, tpid, file string
 	flag.StringVar(&nodeos, "u", "", "nodoes URL to connect to, env var: NODEOS")
@@ -45,7 +45,7 @@ func Setup() (acc *fio.Account, api *fio.API, tokens float64, reportFile *os.Fil
 		var t float64
 		t, err = strconv.ParseFloat(os.Getenv("AMOUNT"), 64)
 		if err != nil {
-			log.Fatal("invalid value for AMOUNT: "+err.Error())
+			log.Fatal("invalid value for AMOUNT: " + err.Error())
 		}
 		tokens = t
 	}
@@ -70,14 +70,14 @@ func Setup() (acc *fio.Account, api *fio.API, tokens float64, reportFile *os.Fil
 	log.Println("v1 history API is available")
 
 	if tpid != "" && fio.SetTpid(tpid) {
-		log.Println("set TPID to "+tpid)
+		log.Println("set TPID to " + tpid)
 	}
 
 	gi, err := api.GetInfo()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if gi.HeadBlockTime.Time.Before(time.Now().Add(-3*time.Minute)) {
+	if gi.HeadBlockTime.Time.Before(time.Now().Add(-3 * time.Minute)) {
 		log.Fatal("head block time is more than 3 minutes behind actual time, is this node syncing?")
 	}
 	log.Println("node appears to be synced, starting airdrop.")
@@ -89,8 +89,7 @@ func Setup() (acc *fio.Account, api *fio.API, tokens float64, reportFile *os.Fil
 		fmt.Println("sleeping 10 seconds, press CTRL-C to abort.")
 		fmt.Println("***************** WARNING ***************** ")
 		fmt.Println("")
-		time.Sleep(10*time.Second)
+		time.Sleep(10 * time.Second)
 	}
 	return
 }
-

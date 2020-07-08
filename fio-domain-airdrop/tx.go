@@ -17,7 +17,7 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 	defer func() {
 		close(done)
 	}()
-	header := `"account","pubkey","amount","successful","txid","confirmed","block_num"`+"\n"
+	header := `"account","pubkey","amount","successful","txid","confirmed","block_num"` + "\n"
 
 	// this routine will catch the abort channel being closed (triggered by sigint etc in main.go) and dump
 	// the current state immediately to stdout, this way if the run is interrupted, it is easier to tell who
@@ -26,9 +26,9 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 	go func() {
 		for {
 			select {
-			case <- done:
+			case <-done:
 				return
-			case <- abort:
+			case <-abort:
 				rMux.Lock()
 				defer rMux.Unlock()
 				fmt.Print("\n****** airdrop interrupted before completion, dumping state ******\n\n")
@@ -65,9 +65,9 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 			}
 			// progressively slowdown if we are doing re-sends, may be getting rate limited so chill a little
 			if i > 0 {
-				time.Sleep(time.Duration(i*500)*time.Millisecond)
+				time.Sleep(time.Duration(i*500) * time.Millisecond)
 				retry += 1
-			} else if x % 100 == 0 {
+			} else if x%100 == 0 {
 				log.Printf("sent %d transactions ...\n", x)
 			}
 			rMux.Lock()
@@ -108,18 +108,18 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 	}
 
 	gi, err := api.GetInfo()
-	if finalityFailed(err){
-		return buf.String()+"\n", errs
+	if finalityFailed(err) {
+		return buf.String() + "\n", errs
 	}
 	now, err := api.GetInfo()
-	if finalityFailed(err){
-		return buf.String()+"\n", errs
+	if finalityFailed(err) {
+		return buf.String() + "\n", errs
 	}
 	for gi.HeadBlockNum > now.LastIrreversibleBlockNum {
-		time.Sleep(6*time.Second)
+		time.Sleep(6 * time.Second)
 		now, err = api.GetInfo()
-		if finalityFailed(err){
-			return buf.String()+"\n", errs
+		if finalityFailed(err) {
+			return buf.String() + "\n", errs
 		}
 		log.Printf("%d blocks until finality...", int64(gi.HeadBlockNum)-int64(now.LastIrreversibleBlockNum))
 	}
@@ -128,7 +128,7 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 	log.Println("verifying transactions")
 	confirmed := 0
 	for x, recip := range recips {
-		if x % 100 == 0 {
+		if x%100 == 0 {
 			log.Printf("verified %d transactions ...\n", x)
 		}
 		rMux.Lock()
@@ -153,7 +153,7 @@ func SendAllTokens(recips []*Recipient, acc *fio.Account, api *fio.API, abort ch
 	}
 	log.Printf("confirmed %d/%d transactions are finalized\n", confirmed, len(recips))
 	fmt.Println("")
-	return buf.String()+"\n", errs
+	return buf.String() + "\n", errs
 }
 
 func (ar *Recipient) SendTokens(acc *fio.Account, api *fio.API) error {
@@ -172,15 +172,15 @@ func (ar *Recipient) SendTokens(acc *fio.Account, api *fio.API) error {
 
 func (ar *Recipient) CheckFinal(api *fio.API) error {
 	if ar.TxId == "" {
-		return errors.New(ar.PubKey+" has an empty txid, cannot confirm finality")
+		return errors.New(ar.PubKey + " has an empty txid, cannot confirm finality")
 	}
 	t, err := hex.DecodeString(ar.TxId)
 	if err != nil {
-		return errors.New(ar.PubKey+": could not decode txid to bytes. "+err.Error())
+		return errors.New(ar.PubKey + ": could not decode txid to bytes. " + err.Error())
 	}
 	tr, err := api.GetTransaction(t)
 	if err != nil {
-		return errors.New(ar.PubKey+": could not query txid. "+err.Error())
+		return errors.New(ar.PubKey + ": could not query txid. " + err.Error())
 	}
 	if tr != nil && tr.BlockNum > 0 {
 		ar.BlockNum = tr.BlockNum
