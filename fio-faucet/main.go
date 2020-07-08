@@ -42,7 +42,7 @@ func main() {
 	}
 	allowedList = strings.Split(allow, ",")
 	if len(allowedList) == 0 {
-		log.Fatal("no whitelist provided.")
+		log.Fatal("no allowed-pubkeys list provided.")
 	}
 	for i := range allowedList {
 		allowedList[i] = strings.TrimSpace(allowedList[i])
