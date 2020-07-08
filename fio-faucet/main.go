@@ -36,9 +36,9 @@ func main() {
 		faucet = envFaucet
 	}
 
-	envWhitelist := os.Getenv("ALLOWED")
-	if envWhitelist != "" {
-		allow = envWhitelist
+	envAllowlist := os.Getenv("ALLOWED")
+	if envAllowlist != "" {
+		allow = envAllowlist
 	}
 	allowedList = strings.Split(allow, ",")
 	if len(allowedList) == 0 {
