@@ -57,7 +57,7 @@ func rejectRequests() (rejected int, err error) {
 	defer f.Close()
 	var e error
 	var l []byte
-	for e == nil {
+	for {
 		l, _, e = reader.ReadLine()
 		if e != nil {
 			if e.Error() == "EOF" {
@@ -70,7 +70,16 @@ func rejectRequests() (rejected int, err error) {
 		if e != nil {
 			continue
 		}
-		requests = append(requests, strconv.Itoa(id))
+		pending, e := isPending(id)
+		if e != nil {
+			log.Println(err)
+			continue
+		}
+		if pending {
+			requests = append(requests, strconv.Itoa(id))
+		} else {
+			log.Println("have already responded to id", id, "skipping")
+		}
 	}
 	if verbose {
 		fmt.Println(requests)
@@ -85,6 +94,39 @@ func rejectRequests() (rejected int, err error) {
 		rejected += 1
 	}
 	return
+}
+
+type tinyResult struct {
+	Id int `json:"id"`
+}
+
+// isPending looks at the fioreqstss and determines if a response has already been sent for the request.
+func isPending(id int) (bool, error) {
+	i := strconv.Itoa(id)
+	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
+		Code:       "fio.reqobt",
+		Scope:      "fio.reqobt",
+		Table:      "fioreqstss",
+		Index:      "2",
+		KeyType:    "i64",
+		LowerBound: i,
+		UpperBound: i,
+		Limit:      1,
+		JSON:       true,
+	})
+	if err != nil {
+		return false, err
+	}
+	ids := make([]tinyResult, 0)
+	err = json.Unmarshal(gtr.Rows, &ids)
+	if err != nil {
+		log.Println("request id:", id, err)
+		return false, err
+	}
+	if ids != nil && len(ids) > 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 // getAddrHashes returns a slice of i128 hashes for all the FIO addresses owned by the account,  which is a partial sha1 sum.
@@ -113,6 +155,22 @@ type onlyRequestId struct {
 // there are thousands of pending requests, it expects an i128 hash, and returns a slice of int64 representing the
 // pending request IDs
 func requestsFromTable(h string) (complete bool, ids []int, err error) {
+
+	// before return, check that if the requests have a response and truncate to only the pending.
+	defer func() {
+		pendingIds := make([]int, 0)
+		for _, pid := range ids {
+			p, e := isPending(pid)
+			if e != nil {
+				log.Println(e)
+			}
+			if p {
+				pendingIds = append(pendingIds, pid)
+			}
+		}
+		ids = pendingIds
+	}()
+
 	// first find the upper bound
 	upperGtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:       "fio.reqobt",
@@ -382,9 +440,6 @@ func options() {
 		log.Fatal("only one operation is supported, either '-in' or '-out'. Use '-h' to list command options")
 	case outFile != "":
 		query = true
-		fallthrough
-	case !strings.HasPrefix(nodeos, "http"):
-		nodeos = "http://" + nodeos
 	}
 
 	_, err := url.Parse(nodeos)
