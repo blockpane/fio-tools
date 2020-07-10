@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const csvHeader = `"request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"` + "\n"
@@ -32,6 +33,7 @@ var (
 )
 
 func main() {
+	log.SetFlags(log.LUTC|log.LstdFlags|log.Lshortfile)
 	options()
 	if query {
 		ok, wrote, err := dumpRequests()
@@ -460,6 +462,24 @@ func options() {
 	acc, api, _, err = fio.NewWifConnect(privKey, nodeos)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	gi, err := api.GetInfo()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if gi.HeadBlockTime.Time.After(time.Now().UTC().Add(30*time.Second)) {
+		log.Printf("Head block time (%v) is after the default transaction timeout of 30s.", gi.HeadBlockTime.Time)
+		log.Fatal("Is your clock synced?")
+	}
+	switch gi.ChainID.String() {
+	case fio.ChainIdMainnet:
+		log.Println("connected to FIO mainnet")
+	case fio.ChainIdTestnet:
+		log.Println("connected to FIO testnet")
+	default:
+		log.Println("**** Warning! chainID is not a known FIO network, pausing for 10 seconds, press CTRL-C to abort ****")
+		time.Sleep(10*time.Second)
 	}
 
 	if os.Getenv("DEBUG") != "" {
