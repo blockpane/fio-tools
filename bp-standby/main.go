@@ -48,7 +48,7 @@ func main() {
 	failing := make(chan error)               // errors from routines, too many errors triggers a restart
 
 	// pass around a common block so multiple routines aren't hammering the endpoint.
-	block := &eos.BlockResp{}
+	block := &blockNumProd{}
 	go func() {
 		info := &eos.InfoResp{}
 		b := &eos.BlockResp{}
@@ -68,7 +68,9 @@ func main() {
 			if b == nil {
 				continue
 			}
-			block = b
+			block.BlockNum = b.BlockNum
+			block.Producer = string(b.Producer)
+			block.ScheduleVersion = b.ScheduleVersion
 			healthy <- "block updates"
 		}
 	}()
@@ -78,7 +80,7 @@ func main() {
 	// finally, seeing duplicate blocks signed by this key indicates the primary node is back online
 
 	// if head is not incrementing, and the previous producer is immediately before this bp, it is missing blocks.
-	var neighbors = &[2]string{}
+	var neighbors = &neighbor{}
 	go missedByOrder(neighbors, block, acc, byOrder, healthy)
 
 	// checking order may not be reliable if multiple producers are missing rounds, this is a fallback that should find
@@ -113,6 +115,7 @@ func main() {
 
 	topTick := time.NewTicker(time.Minute)
 
+	active, err = isTop21(neighbors, api, acc)
 	for {
 		select {
 		case <-restored:
@@ -151,7 +154,7 @@ func main() {
 
 		// track our state, are this bp in the top 21, is production currently paused?
 		case <-topTick.C:
-			active, neighbors, err = isTop21(api, acc)
+			active, err = isTop21(neighbors, api, acc)
 			if err != nil {
 				failing <- err
 			}
@@ -169,11 +172,23 @@ func main() {
 	}
 }
 
-func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountName, missing chan bool, healthy chan string) {
-	for neighbors[0] == "" || block == nil {
-		time.Sleep(time.Second)
-		log.Println("missed log detection not started, waiting for data")
+type neighbor struct {
+	Before string
+	After string
+}
+
+type blockNumProd struct {
+	Producer string
+	BlockNum uint32
+	ScheduleVersion uint32
+}
+
+func missedByOrder(neighbors *neighbor, block *blockNumProd, bp eos.AccountName, missing chan bool, healthy chan string) {
+	for neighbors.Before == "" || block == nil {
+		time.Sleep(5*time.Second)
+		log.Println("missed block detection not started, waiting for data")
 	}
+	log.Println("watching for missed blocks")
 
 	var produced, wereNext, busy bool
 	var missedCounter int
@@ -191,15 +206,15 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 				busy = false
 				continue
 			}
-			switch string(block.Producer) {
-			case neighbors[0]:
+			switch block.Producer {
+			case neighbors.Before:
 				wereNext = true
 				produced = false
 			case string(bp):
 				wereNext = false
 				produced = true
 				missedCounter = 0
-			case neighbors[1]:
+			case neighbors.After:
 				if !produced && wereNext {
 					// missed the entire round!
 					log.Printf("%s was scheduled to be next, but did not produce\n", bp)
@@ -207,8 +222,11 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 					wereNext = false
 				}
 			}
-			if wereNext && block.BlockNum == lastBlock {
-				missedCounter += 1
+			if block.BlockNum == lastBlock {
+				log.Println("block not incrementing", lastBlock, "last producer", block.Producer)
+				if wereNext {
+					missedCounter += 1
+				}
 			}
 			lastBlock = block.BlockNum
 			// this would be 4 missed blocks
@@ -222,11 +240,12 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 	}
 }
 
-func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
+func missedRound(block *blockNumProd, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
 	for block == nil {
 		time.Sleep(time.Second)
 		log.Println("missed round detection not started, waiting for data")
 	}
+	log.Println("watching for missed rounds")
 
 	var lastScheduleVer, lastScheduleLib uint32
 	for {
@@ -258,7 +277,7 @@ func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing
 		}
 		if ok, lp := bhs.ProducerToLast(fio.ProducerToLastProduced); ok {
 			for _, prod := range lp {
-				if string(prod.Producer) == string(bp) && prod.BlockNum < block.BlockNum-(21*6) {
+				if string(prod.Producer) == string(bp) && prod.BlockNum < block.BlockNum-(21*13) {
 					log.Printf("detected %s has missed a round, last produced on %d, %d blocks ago\n", bp, prod.BlockNum, block.BlockNum-prod.BlockNum)
 					missing <- true
 				}
@@ -310,7 +329,7 @@ func duplicateSig(file string, bp string, restored chan bool, healthy chan strin
 	}
 }
 
-func isTop21(api *fio.API, prod eos.AccountName) (active bool, neighbors *[2]string, err error) {
+func isTop21(neighbors *neighbor, api *fio.API, prod eos.AccountName) (active bool, err error) {
 	ps, err := api.GetProducerSchedule()
 	if err != nil {
 		return
@@ -328,19 +347,19 @@ func isTop21(api *fio.API, prod eos.AccountName) (active bool, neighbors *[2]str
 			if p == string(prod) {
 				switch i {
 				case 0:
-					neighbors[0] = prods[len(prods)-1]
-					neighbors[1] = prods[i+1]
+					neighbors.Before = prods[len(prods)-1]
+					neighbors.After = prods[i+1]
 				case len(prods) - 1:
-					neighbors[0] = prods[i-1]
-					neighbors[1] = prods[0]
+					neighbors.Before = prods[i-1]
+					neighbors.After = prods[0]
 				default:
-					neighbors[0] = prods[i-1]
-					neighbors[1] = prods[i+1]
+					neighbors.Before = prods[i-1]
+					neighbors.After = prods[i+1]
 				}
 			}
 		}
 	}
-	return
+	return active, err
 }
 
 func opts() (api *fio.API, account eos.AccountName, logFile string) {
@@ -353,8 +372,8 @@ func opts() (api *fio.API, account eos.AccountName, logFile string) {
 
 	var a, url string
 	flag.StringVar(&url, "u", "http://127.0.0.1:8888", "nodeos API to connect to")
-	flag.StringVar(&a, "-a", "", "producer account to watch for")
-	flag.StringVar(&logFile, "-f", "/var/log/fio/nodeos.log", "nodeos log file for detecting duplicate blocks")
+	flag.StringVar(&a, "a", "", "producer account to watch for")
+	flag.StringVar(&logFile, "f", "/var/log/fio/nodeos.log", "nodeos log file for detecting duplicate blocks")
 	flag.Parse()
 
 	api, _, err = fio.NewConnection(nil, url)
