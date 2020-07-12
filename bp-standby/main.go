@@ -16,22 +16,33 @@ var (
 )
 
 func main() {
-	log.SetFlags(log.LstdFlags|log.Lshortfile|log.LUTC)
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
 	var err error
 	api, acc, nodeLog := opts()
 
-	// always start paused
-	err = api.ProducerPause()
+	// make sure producer API is even available
+	paused, err = api.IsProducerPaused()
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 
-	healthy := make(chan string)
-	lastHealthy := make(map[string]time.Time)
-	byOrder := make(chan bool)
-	byRound := make(chan bool)
-	restored := make(chan bool)
-	failing := make(chan error)
+	// always start paused, some danger in this if this program is repeatedly crashing, which is worse,
+	// missing blocks or double-producing blocks and causing many small forks?
+	if !paused {
+		paused = true
+		err = api.ProducerPause()
+		if err != nil {
+			log.Println(err)
+			paused = false
+		}
+	}
+
+	healthy := make(chan string)              // go routine heartbeat channel
+	lastHealthy := make(map[string]time.Time) // tracks last heartbeat for routines, too long w/no heartbeat and we bail
+	byOrder := make(chan bool)                // notifications for missing blocks
+	byRound := make(chan bool)                // notifications for missing entire rounds, in case missed block detection doesn't work
+	restored := make(chan bool)               // notification that other node is signing blocks, and we need to stop
+	failing := make(chan error)               // errors from routines, too many and we bail
 
 	// pass around a common block so multiple routines aren't hammering the endpoint.
 	block := &eos.BlockResp{}
@@ -43,18 +54,19 @@ func main() {
 			time.Sleep(time.Second)
 			info, err = api.GetInfo()
 			if err != nil {
-				failing <-err
+				failing <- err
 				continue
 			}
 			b, err = api.GetBlockByNum(info.HeadBlockNum)
 			if err != nil {
-				failing <-err
+				failing <- err
 				continue
 			}
 			if b == nil {
 				continue
 			}
 			block = b
+			healthy <- "block updates"
 		}
 	}()
 
@@ -86,7 +98,7 @@ func main() {
 		if paused {
 			err = api.ProducerResume()
 			if err != nil {
-				log.Println("could not resume producer: "+err.Error())
+				log.Println("could not resume producer: " + err.Error())
 				unhealthy = false // force recheck next interval.
 				paused = true
 			}
@@ -100,7 +112,7 @@ func main() {
 
 	for {
 		select {
-		case <- restored:
+		case <-restored:
 			if !paused {
 				log.Println("pausing block production")
 				err = api.ProducerPause()
@@ -130,7 +142,7 @@ func main() {
 			failcount += 1
 			if failcount > 10 {
 				// anticipated this is running in a container or under systemd control, and will be restarted.
-				log.Fatal("too many failed checks, exiting: "+fail.Error())
+				log.Fatal("too many failed checks, exiting: " + fail.Error())
 			}
 			log.Println(fail)
 
@@ -138,7 +150,7 @@ func main() {
 		case <-topTick.C:
 			active, neighbors, err = isTop21(api, acc)
 			if err != nil {
-				failing <-err
+				failing <- err
 			}
 			paused, err = api.IsProducerPaused()
 			if err != nil {
@@ -146,7 +158,7 @@ func main() {
 			}
 			// check for dead routines, exit if dead
 			for rtn := range lastHealthy {
-				if lastHealthy[rtn].Before(time.Now().Add(-10*time.Minute)) {
+				if lastHealthy[rtn].Before(time.Now().Add(-10 * time.Minute)) {
 					log.Fatalf("FATAL: %s routine hasn't sent a heartbeat for %v, exiting.", rtn, time.Now().Sub(lastHealthy[rtn]))
 				}
 			}
@@ -160,7 +172,7 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 	t := time.NewTicker(time.Second)
 	for {
 		select {
-		case <- t.C:
+		case <-t.C:
 			if busy {
 				continue
 			}
@@ -204,16 +216,16 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
 	var lastScheduleVer, lastScheduleLib uint32
 	for {
-		time.Sleep(6*time.Second)
+		time.Sleep(6 * time.Second)
 		healthy <- "missed rounds"
-		if !paused || block.ScheduleVersion <= lastScheduleVer{
+		if !paused || block.ScheduleVersion <= lastScheduleVer {
 			continue
 		}
 		lastScheduleVer = block.ScheduleVersion
 
 		bhs, err := api.GetBlockHeaderState(block.BlockNum)
 		if err != nil {
-			failed <-err
+			failed <- err
 			continue
 		}
 		// make sure we've had a chance for full round on this schedule before checking
@@ -224,7 +236,7 @@ func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing
 				failed <- err
 				continue
 			}
-			if time.Now().Before(gsb.SignedBlockHeader.Timestamp.Time.Add(6*time.Minute)) {
+			if time.Now().Before(gsb.SignedBlockHeader.Timestamp.Time.Add(6 * time.Minute)) {
 				// not long enough to declare missing....
 				continue
 			}
@@ -232,8 +244,8 @@ func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing
 		}
 		if ok, lp := bhs.ProducerToLast(fio.ProducerToLastProduced); ok {
 			for _, prod := range lp {
-				if string(prod.Producer) == string(bp) && prod.BlockNum < block.BlockNum - (21 * 6) {
-					log.Printf("detected %s has missed a round, last produced on %d, %d blocks ago\n", bp, prod.BlockNum, block.BlockNum - prod.BlockNum)
+				if string(prod.Producer) == string(bp) && prod.BlockNum < block.BlockNum-(21*6) {
+					log.Printf("detected %s has missed a round, last produced on %d, %d blocks ago\n", bp, prod.BlockNum, block.BlockNum-prod.BlockNum)
 					missing <- true
 				}
 			}
@@ -265,11 +277,11 @@ func isTop21(api *fio.API, prod eos.AccountName) (active bool, neighbors *[2]str
 				case 0:
 					neighbors[0] = prods[len(prods)-1]
 					neighbors[1] = prods[i+1]
-				case len(prods)-1:
-					neighbors[0]= prods[i-1]
+				case len(prods) - 1:
+					neighbors[0] = prods[i-1]
 					neighbors[1] = prods[0]
 				default:
-					neighbors[0]= prods[i-1]
+					neighbors[0] = prods[i-1]
 					neighbors[1] = prods[i+1]
 				}
 			}
