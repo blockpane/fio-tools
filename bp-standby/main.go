@@ -167,8 +167,12 @@ func main() {
 }
 
 func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountName, missing chan bool, healthy chan string) {
+	for neighbors[0] == "" || block == nil {
+		time.Sleep(time.Second)
+	}
 	var produced, wereNext, busy bool
-	var missedCounter, lastBlock uint32
+	var missedCounter int
+	lastBlock := block.BlockNum - 1
 	t := time.NewTicker(time.Second)
 	for {
 		select {
@@ -214,6 +218,10 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 }
 
 func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
+	for block == nil {
+		time.Sleep(time.Second)
+	}
+
 	var lastScheduleVer, lastScheduleLib uint32
 	for {
 		time.Sleep(6 * time.Second)
