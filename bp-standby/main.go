@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"github.com/fioprotocol/fio-go"
 	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
+	"github.com/hpcloud/tail"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -28,21 +31,21 @@ func main() {
 
 	// always start paused, some danger in this if this program is repeatedly crashing, which is worse,
 	// missing blocks or double-producing blocks and causing many small forks?
-	if !paused {
-		paused = true
-		err = api.ProducerPause()
-		if err != nil {
-			log.Println(err)
-			paused = false
-		}
-	}
+	//if !paused {
+	//	paused = true
+	//	err = api.ProducerPause()
+	//	if err != nil {
+	//		log.Println(err)
+	//		paused = false
+	//	}
+	//}
 
 	healthy := make(chan string)              // go routine heartbeat channel
-	lastHealthy := make(map[string]time.Time) // tracks last heartbeat for routines, too long w/no heartbeat and we bail
+	lastHealthy := make(map[string]time.Time) // tracks last heartbeat for routines, if too long w/no heartbeat then bail
 	byOrder := make(chan bool)                // notifications for missing blocks
 	byRound := make(chan bool)                // notifications for missing entire rounds, in case missed block detection doesn't work
-	restored := make(chan bool)               // notification that other node is signing blocks, and we need to stop
-	failing := make(chan error)               // errors from routines, too many and we bail
+	restored := make(chan bool)               // notification that other node is signing blocks, and to stop local production
+	failing := make(chan error)               // errors from routines, too many errors triggers a restart
 
 	// pass around a common block so multiple routines aren't hammering the endpoint.
 	block := &eos.BlockResp{}
@@ -72,18 +75,18 @@ func main() {
 
 	// use two methods to watch for missed blocks. One is by expecting blocks from our account before or after
 	// based on sorting in the schedule. Second is by watching for missed rounds based on reversible block states.
-	// finally, if we start seeing duplicate blocks signed by our key, we know the primary is back online
+	// finally, seeing duplicate blocks signed by this key indicates the primary node is back online
 
-	// if head is not incrementing, and the previous producer is immediately before ours, we are missing blocks.
+	// if head is not incrementing, and the previous producer is immediately before this bp, it is missing blocks.
 	var neighbors = &[2]string{}
 	go missedByOrder(neighbors, block, acc, byOrder, healthy)
 
 	// checking order may not be reliable if multiple producers are missing rounds, this is a fallback that should find
-	// if the producer is missing entire rounds. Not ideal, but beats missing many rounds instead of just one.
+	// if this producer is missing entire rounds. Not ideal, but beats missing many rounds instead of just one.
 	go missedRound(block, api, acc, byRound, healthy, failing)
 
-	// if seeing blocks signed by the bp account then it's back online. In this case, watch the nodeos log file
-	go duplicateSig(nodeLog, api, acc, restored, failing)
+	// if seeing blocks signed by this bp account then it's back online, stop producing. In this case, watch the nodeos log file
+	go duplicateSig(nodeLog, string(acc), restored, healthy, failing)
 
 	var (
 		failcount int
@@ -146,7 +149,7 @@ func main() {
 			}
 			log.Println(fail)
 
-		// track our state, are we a top21, is production currently paused?
+		// track our state, are this bp in the top 21, is production currently paused?
 		case <-topTick.C:
 			active, neighbors, err = isTop21(api, acc)
 			if err != nil {
@@ -158,7 +161,7 @@ func main() {
 			}
 			// check for dead routines, exit if dead
 			for rtn := range lastHealthy {
-				if lastHealthy[rtn].Before(time.Now().Add(-10 * time.Minute)) {
+				if lastHealthy[rtn].Before(time.Now().Add(-5 * time.Minute)) {
 					log.Fatalf("FATAL: %s routine hasn't sent a heartbeat for %v, exiting.", rtn, time.Now().Sub(lastHealthy[rtn]))
 				}
 			}
@@ -169,7 +172,9 @@ func main() {
 func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountName, missing chan bool, healthy chan string) {
 	for neighbors[0] == "" || block == nil {
 		time.Sleep(time.Second)
+		log.Println("missed log detection not started, waiting for data")
 	}
+
 	var produced, wereNext, busy bool
 	var missedCounter int
 	lastBlock := block.BlockNum - 1
@@ -220,6 +225,7 @@ func missedByOrder(neighbors *[2]string, block *eos.BlockResp, bp eos.AccountNam
 func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
 	for block == nil {
 		time.Sleep(time.Second)
+		log.Println("missed round detection not started, waiting for data")
 	}
 
 	var lastScheduleVer, lastScheduleLib uint32
@@ -236,7 +242,7 @@ func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing
 			failed <- err
 			continue
 		}
-		// make sure we've had a chance for full round on this schedule before checking
+		// ensure at least a full round on this schedule before checking
 		if bhs.PendingSchedule.ScheduleLibNum != lastScheduleLib {
 			gsb := &eos.BlockResp{}
 			gsb, err = api.GetBlockByNum(bhs.PendingSchedule.ScheduleLibNum)
@@ -261,8 +267,47 @@ func missedRound(block *eos.BlockResp, api *fio.API, bp eos.AccountName, missing
 	}
 }
 
-func duplicateSig(file string, api *fio.API, bp eos.AccountName, restored chan bool, failed chan error) {
-	// TODO: use https://github.com/hpcloud/tail to watch log file
+// duplicateSig watches the nodeos stdout logs for duplicate blocks by the same producer, these will be rejected
+// with a 'Block not applied to head' error. This isn't a 100% guarantee that there aren't two active nodes
+// producing blocks with the same key, if a block is empty both producers will create identical blocks. This should
+// catch it pretty quick though.
+func duplicateSig(file string, bp string, restored chan bool, healthy chan string, failed chan error) {
+	t, err := tail.TailFile(file, tail.Config{
+		Follow: true,
+		ReOpen: true,
+		MustExist: true,
+		Location: &tail.SeekInfo{
+			Offset: 0,
+			Whence: 2,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer t.Cleanup()
+
+	healthTick := time.NewTicker(time.Minute)
+	var last time.Time
+	re := regexp.MustCompile(`Block not applied to head.*signed by (\w{12})`)
+
+	for {
+		select {
+		case <- t.Dead():
+			failed <- errors.New("log watcher died")
+
+		case line := <-t.Lines:
+			if match := re.FindStringSubmatch(line.Text); len(match) > 1 && match[1] == bp {
+				log.Println(match[1], "produced a duplicate block")
+				restored <- true
+			}
+			last = line.Time
+
+		case <- healthTick.C:
+			if last.After(time.Now().Add(-1*time.Minute)) {
+				healthy <- "log watcher"
+			}
+		}
+	}
 }
 
 func isTop21(api *fio.API, prod eos.AccountName) (active bool, neighbors *[2]string, err error) {
