@@ -31,14 +31,14 @@ func main() {
 
 	// always start paused, some danger in this if this program is repeatedly crashing, which is worse,
 	// missing blocks or double-producing blocks and causing many small forks?
-	//if !paused {
-	//	paused = true
-	//	err = api.ProducerPause()
-	//	if err != nil {
-	//		log.Println(err)
-	//		paused = false
-	//	}
-	//}
+	if !paused {
+		paused = true
+		err = api.ProducerPause()
+		if err != nil {
+			log.Println(err)
+			paused = false
+		}
+	}
 
 	healthy := make(chan string)              // go routine heartbeat channel
 	lastHealthy := make(map[string]time.Time) // tracks last heartbeat for routines, if too long w/no heartbeat then bail
@@ -174,18 +174,18 @@ func main() {
 
 type neighbor struct {
 	Before string
-	After string
+	After  string
 }
 
 type blockNumProd struct {
-	Producer string
-	BlockNum uint32
+	Producer        string
+	BlockNum        uint32
 	ScheduleVersion uint32
 }
 
 func missedByOrder(neighbors *neighbor, block *blockNumProd, bp eos.AccountName, missing chan bool, healthy chan string) {
 	for neighbors.Before == "" || block == nil {
-		time.Sleep(5*time.Second)
+		time.Sleep(5 * time.Second)
 		log.Println("missed block detection not started, waiting for data")
 	}
 	log.Println("watching for missed blocks")
@@ -292,8 +292,8 @@ func missedRound(block *blockNumProd, api *fio.API, bp eos.AccountName, missing 
 // catch it pretty quick though.
 func duplicateSig(file string, bp string, restored chan bool, healthy chan string, failed chan error) {
 	t, err := tail.TailFile(file, tail.Config{
-		Follow: true,
-		ReOpen: true,
+		Follow:    true,
+		ReOpen:    true,
 		MustExist: true,
 		Location: &tail.SeekInfo{
 			Offset: 0,
@@ -311,7 +311,7 @@ func duplicateSig(file string, bp string, restored chan bool, healthy chan strin
 
 	for {
 		select {
-		case <- t.Dead():
+		case <-t.Dead():
 			failed <- errors.New("log watcher died")
 
 		case line := <-t.Lines:
@@ -321,8 +321,8 @@ func duplicateSig(file string, bp string, restored chan bool, healthy chan strin
 			}
 			last = line.Time
 
-		case <- healthTick.C:
-			if last.After(time.Now().Add(-1*time.Minute)) {
+		case <-healthTick.C:
+			if last.After(time.Now().Add(-1 * time.Minute)) {
 				healthy <- "log watcher"
 			}
 		}
