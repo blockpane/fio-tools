@@ -6,9 +6,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/frameloss/fio-extras"
-	"github.com/fioprotocol/fio-go/eos"
 	"github.com/fioprotocol/fio-go"
+	"github.com/fioprotocol/fio-go/eos"
+	"github.com/frameloss/fio-extras"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/yaml.v2"
 	"log"
@@ -252,7 +252,7 @@ func main() {
 	}
 }
 
-func recordObt(requestId uint64, payer string, payee string, actor string, requestJson string, keosd *fio.KeosClient, nodeosUrl string) (txid string, results json.RawMessage, err error) {
+func recordObt(requestId uint64, payer string, payee string, actor string, requestJson string, keosd *fiox.KeosClient, nodeosUrl string) (txid string, results json.RawMessage, err error) {
 	if requestId == 0 {
 		err = errors.New("must supply a request id")
 	}
@@ -304,7 +304,7 @@ func recordObt(requestId uint64, payer string, payee string, actor string, reque
 	return
 }
 
-func requestNew(payer string, payee string, actor string, requestJson string, keosd *fio.KeosClient, nodeosUrl string) (txid string, results json.RawMessage, err error) {
+func requestNew(payer string, payee string, actor string, requestJson string, keosd *fiox.KeosClient, nodeosUrl string) (txid string, results json.RawMessage, err error) {
 	if !fio.Address(payer).Valid() {
 		err = errors.New("payer address is invalid")
 	}
@@ -453,7 +453,7 @@ func getPubForActor(actor string, api *fio.API) (pubkey string, err error) {
 	return found[0].Clientkey, nil
 }
 
-func authenticate(actor string, keosd *fio.KeosClient, nodeosUrl string) (account *fio.Account, api *fio.API, opts *fio.TxOptions, err error) {
+func authenticate(actor string, keosd *fiox.KeosClient, nodeosUrl string) (account *fio.Account, api *fio.API, opts *fio.TxOptions, err error) {
 	if keosd.Keys == nil || keosd.Keys[actor].PrivateKey == "" {
 		err = errors.New("could not find private key for actor " + actor)
 		return
@@ -469,7 +469,7 @@ func authenticate(actor string, keosd *fio.KeosClient, nodeosUrl string) (accoun
 	return
 }
 
-func reject(requestId uint64, actor string, keosd *fio.KeosClient, nodeosUrl string) (ok bool, resp json.RawMessage, err error) {
+func reject(requestId uint64, actor string, keosd *fiox.KeosClient, nodeosUrl string) (ok bool, resp json.RawMessage, err error) {
 	_, api, opts, err := authenticate(actor, keosd, nodeosUrl)
 	if err != nil {
 		return
@@ -488,7 +488,7 @@ func reject(requestId uint64, actor string, keosd *fio.KeosClient, nodeosUrl str
 	return
 }
 
-func view(requestId uint64, actor string, keosd *fio.KeosClient, nodeosUrl string) (outer []byte, resp []byte, counterParty string, err error) {
+func view(requestId uint64, actor string, keosd *fiox.KeosClient, nodeosUrl string) (outer []byte, resp []byte, counterParty string, err error) {
 	account, api, _, err := authenticate(actor, keosd, nodeosUrl)
 	if err != nil {
 		return
@@ -517,7 +517,7 @@ func view(requestId uint64, actor string, keosd *fio.KeosClient, nodeosUrl strin
 	return
 }
 
-func viewRecord(requestId uint64, actor string, counterParty string, keosd *fio.KeosClient, nodeosUrl string) (found bool, record []byte, err error) {
+func viewRecord(requestId uint64, actor string, counterParty string, keosd *fiox.KeosClient, nodeosUrl string) (found bool, record []byte, err error) {
 	account, api, _, err := authenticate(actor, keosd, nodeosUrl)
 	if err != nil {
 		return
