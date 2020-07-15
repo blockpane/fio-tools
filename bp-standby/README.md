@@ -3,6 +3,9 @@
 This is a tool that will enable or disable block production on a node. It is intended to activate a standby node quickly,
 if a producer is not signing, and deactivate just as quickly if it detects the primary node is producing blocks again.
 
+This utility should be run ON the _standby_ node, it does not require any other connections -- all missed block detection
+takes place from on-chain data.
+
 _Note: this won't work correctly on EOS because the producer schedule in FIO is sorted by account, not location._
 
 Obviously this requires the `eosio::producer_api_plugin` to be enabled. Don't expose this API to the internet or it

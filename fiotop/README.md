@@ -1,5 +1,10 @@
 # fiotop
 
+*NOTE: this utility is intended for use on a local node, and is intended as a
+development tool. Don't point this at a public endpoint, it generates
+a significant number of requests, and will flood a remote node. Please be
+polite :)*
+
 A simple utility for watching the state of a node. Shows some basic net
 info, peer info (if the net_api_plugin is enabled), database size (if
 the db_size_api_plugin is enabled), list of producers, and an event stream.
