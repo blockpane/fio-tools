@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"github.com/fioprotocol/fio-go"
-	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
+	"github.com/fioprotocol/fio-go/eos"
 	"github.com/hpcloud/tail"
 	"log"
 	"os"

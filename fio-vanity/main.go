@@ -13,8 +13,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
-	ecc "github.com/fioprotocol/fio-go/imports/eos-fio/fecc"
+	"github.com/fioprotocol/fio-go/eos"
+	"github.com/fioprotocol/fio-go/eos/ecc"
 	"github.com/mr-tron/base58"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
-	eos "github.com/fioprotocol/fio-go/imports/eos-fio"
+	"github.com/fioprotocol/fio-go/eos"
 	"io/ioutil"
 	"log"
 	"math/rand"
