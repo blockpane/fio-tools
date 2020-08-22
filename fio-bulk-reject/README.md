@@ -1,19 +1,23 @@
 # fio-bulk-reject
 
-A simple utility for either dumping all FIO requests in csv format, or rejecting a list of requests from a list of
-request IDs.
+A simple utility for either dumping all FIO requests in csv format, rejecting ALL pending requests, or rejecting a list
+of requests from a list of request IDs from a file.
 
 ## options
 
 ```
-  -u string
-    	FIO API endpoint to use (default "https://testnet.fioprotocol.io")
   -in string
-    	file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq
+        file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq
   -k string
-    	private key in WIF format, if absent will prompt
+        private key in WIF format, if absent will prompt
+  -nuke
+        don't print, don't check, nuke all pending requests. Incompatible with -in -out
   -out string
-    	file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details
+        file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details
+  -u string
+        FIO API endpoint to use (default "https://testnet.fioprotocol.io")
+  -unknown
+        allow connecting to unknown chain id
 ```
 
 ## query
