@@ -30,12 +30,24 @@ var (
 	f       *os.File
 	query   bool
 	verbose bool
+	nuke    bool
 )
 
 func main() {
 	log.SetFlags(log.LUTC|log.LstdFlags|log.Lshortfile)
 	options()
-	if query {
+	switch true {
+	case nuke:
+		deleted, err := nukeEmAll()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Rejected %d requests\n", deleted)
+		if r, _, _ := api.GetPendingFioRequests(acc.PubKey, 1000, 0); len(r.Requests) > 0 {
+			log.Fatal("there are still pending requests, please try again.")
+		}
+		os.Exit(0)
+	case query:
 		ok, wrote, err := dumpRequests()
 		log.Printf("wrote %d records to %s\n", wrote, outFile)
 		if !ok {
@@ -50,6 +62,43 @@ func main() {
 	log.Printf("rejected %d requests from %s\n", rejected, inFile)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func nukeEmAll() (rejected int, err error) {
+	var r fio.PendingFioRequestsResponse
+	// rejecting again before committed? Maybe, this moves pretty quick. skip dups....
+	dups := make(map[uint64]bool)
+
+	retried := 0
+	for {
+		time.Sleep(50*time.Millisecond)
+		r, _, err = api.GetPendingFioRequests(acc.PubKey, 1000, 0)
+		if len(r.Requests) == 0 {
+			retried += 1
+			// something's not right with the api responses, retry a few times. Sometimes getting an empty result
+			// where there are pending requests!
+			if retried > 3 {
+				return
+			}
+			continue
+		}
+		for _, req := range r.Requests {
+			if dups[req.FioRequestId] {
+				continue
+			}
+			dups[req.FioRequestId] = true
+			// closure to deref
+			func(i uint64){
+				_, err = api.SignPushActions(fio.NewRejectFndReq(acc.Actor, strconv.Itoa(int(i))))
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Println("rejected request:", i)
+					rejected += 1
+				}
+			}(req.FioRequestId)
+		}
 	}
 }
 
@@ -428,15 +477,18 @@ func dumpRequests() (ok bool, wrote int, err error) {
 
 func options() {
 	var nodeos, privKey string
+	var unknown bool
 
 	flag.StringVar(&privKey, "k", "", "private key in WIF format, if absent will prompt")
 	flag.StringVar(&inFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
 	flag.StringVar(&outFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
 	flag.StringVar(&nodeos, "u", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
+	flag.BoolVar(&nuke, "nuke", false, "don't print, don't check, nuke all pending requests. Incompatible with -in -out")
+	flag.BoolVar(&unknown, "unknown", false, "allow connecting to unknown chain id")
 	flag.Parse()
 
 	switch true {
-	case inFile == "" && outFile == "":
+	case inFile == "" && outFile == "" && !nuke:
 		log.Fatal("either '-in' (file with request IDs to reject, one integer per line) or '-out' (location for .csv report) is required. Use '-h' to list command options")
 	case inFile != "" && outFile != "":
 		log.Fatal("only one operation is supported, either '-in' or '-out'. Use '-h' to list command options")
@@ -451,8 +503,8 @@ func options() {
 
 	if privKey == "" {
 		reader := bufio.NewReader(os.Stdin)
-		b, _, err := reader.ReadLine()
 		fmt.Print("please enter the private key: ")
+		b, _, err := reader.ReadLine()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -478,8 +530,9 @@ func options() {
 	case fio.ChainIdTestnet:
 		log.Println("connected to FIO testnet")
 	default:
-		log.Println("**** Warning! chainID is not a known FIO network, pausing for 10 seconds, press CTRL-C to abort ****")
-		time.Sleep(10*time.Second)
+		if !unknown {
+			log.Fatal("refusing to connect to unknown chain id (not mainnet or testnet) override with'-unknown'")
+		}
 	}
 
 	if os.Getenv("DEBUG") != "" {
@@ -494,8 +547,10 @@ func options() {
 		return
 	}
 
-	f, err = os.OpenFile(inFile, os.O_RDONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
+	if inFile != "" {
+		f, err = os.OpenFile(inFile, os.O_RDONLY, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

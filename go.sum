@@ -71,6 +71,8 @@ github.com/ethereum/go-ethereum v1.9.16/go.mod h1:kihoiSg74VC4dZAXMkmoWp70oQabz4
 github.com/fatih/color v1.3.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fioprotocol/fio-go v1.0.0-alpha3 h1:lvcVlh9aIooUj9G09HOlRM1ubFzWAdg9zyVqNrRBhfM=
 github.com/fioprotocol/fio-go v1.0.0-alpha3/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
+github.com/fioprotocol/fio-go v1.0.0 h1:Il28sKI4QEch+2fTLkJZ5eytQHvFhAxhZfjwDoimhc0=
+github.com/fioprotocol/fio-go v1.0.0/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
 github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc/go.mod h1:VvhXpOYNQvB+uIk2RvXzuaQtkQJzzIx6lSBe1xv7hi0=
 github.com/frameloss/fio-extras v0.0.0-20200715062733-eae6cec19b91 h1:qD/KUghAvVEn7K8mnKYuG/rOKsYkydGpCaEVp+koMF0=
 github.com/frameloss/fio-extras v0.0.0-20200715062733-eae6cec19b91/go.mod h1:7cbxn23WqawYSRQu4JLuLocFH+T6MswcOmgGCJ1S8y4=
