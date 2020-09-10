@@ -1,11 +1,11 @@
-module github.com/frameloss/fio-tools
+module github.com/blockpane/fio-tools
 
 go 1.14
 
 require (
+	github.com/blockpane/fio-extras v0.0.0-20200910224021-ec65f081ef2d
 	github.com/ethereum/go-ethereum v1.9.16
 	github.com/fioprotocol/fio-go v1.0.0
-	github.com/frameloss/fio-extras v0.0.0-20200715062733-eae6cec19b91
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/hpcloud/tail v1.0.0
 	github.com/mr-tron/base58 v1.2.0

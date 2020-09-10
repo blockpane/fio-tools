@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
-	"github.com/frameloss/fio-tools/voter"
+	"github.com/blockpane/fio-tools/voter"
 	"io/ioutil"
 	"log"
 	"os"

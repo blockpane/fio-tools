@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/blockpane/fio-tools/fio-domain-airdrop"
 	"github.com/fioprotocol/fio-go"
-	"github.com/frameloss/fio-tools/fio-domain-airdrop"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 	"log"

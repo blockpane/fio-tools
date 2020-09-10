@@ -13,8 +13,8 @@ These are provided with no warranty, use at your own risk.
 1. Fetch and install the programs:
 
 ```
-$ go get -d github.com/frameloss/fio-tools
-$ cd ~/go/src/github.com/frameloss/fio-tools/
+$ go get -d github.com/blockpane/fio-tools
+$ cd ~/go/src/github.com/blockpane/fio-tools/
 $ go get ./...
 $ go install -ldflags="-s -w" ./...
 ```
