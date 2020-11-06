@@ -13,7 +13,7 @@ while read line; do
   GOOS=linux go build -ldflags="-s -w" -o dist/fio-tools-linux/${n} $line/main.go
   CGO_LDFLAGS="-mmacosx-version-min=10.14" CGO_CFLAGS="-mmacosx-version-min=10.14" GOOS=darwin go build -ldflags="-s -w" -o dist/fio-tools-darwin/${n} $line/main.go
   if [[ "${n}" != "fioreq" ]]; then
-    GOOS=windows go build -ldflags="-s -w" -o dist/fio-tools-win/${n} $line/main.go
+    GOOS=windows go build -ldflags="-s -w" -o dist/fio-tools-win/"${n}.exe" $line/main.go
   fi
 done << EOF
 bp-standby
