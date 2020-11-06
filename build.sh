@@ -29,7 +29,7 @@ EOF
 
 pushd dist
 ls -1 |while read line; do
-  zip -r "${line}-${VER}" "${line}"
+  zip -r "${line}-${VER}.zip" "${line}"
   rm -fr "${line}"
 done
 popd
