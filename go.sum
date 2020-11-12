@@ -86,6 +86,14 @@ github.com/fatih/color v1.3.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5Kwzbycv
 github.com/fioprotocol/fio-go v1.0.0/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
 github.com/fioprotocol/fio-go v1.0.1 h1:kwACdSKiohLV7/jrP9iXjFWpWJtKG/rIwZw4hWymdH0=
 github.com/fioprotocol/fio-go v1.0.1/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111204044-913ed6aae2dd h1:0Tjt+VvyueRW9BzDunKgKhgLJkC7qe+LrPFjfrM4918=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111204044-913ed6aae2dd/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111210926-48a9619477a5 h1:8GQ1x8eJImg5W3uFpqOHjC7wF9l8A1wtEE7VJoCaMuI=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111210926-48a9619477a5/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111224116-460d288702bf h1:WvoftKiqiXDmeBq0VsxvOOg975bZbhndGZiWK4NdFGc=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111224116-460d288702bf/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111225448-7395e8ae6118 h1:t0nn2KkODw6LAlPoaG/HLraVVDIbxIMWG4Ghn7BspQY=
+github.com/fioprotocol/fio-go v1.0.2-0.20201111225448-7395e8ae6118/go.mod h1:cX96BK9Y8fQPJP2GXGQvCFovHJ35lw7ICUUUAzqnH40=
 github.com/fjl/memsize v0.0.0-20180418122429-ca190fb6ffbc/go.mod h1:VvhXpOYNQvB+uIk2RvXzuaQtkQJzzIx6lSBe1xv7hi0=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=

@@ -7,6 +7,7 @@ import (
 	"github.com/fioprotocol/fio-go/eos"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"sort"
@@ -29,8 +30,7 @@ func main() {
 		log.Fatal("Missing NODEOS or WIF environment variable.")
 	}
 
-	//acc, api, opt, err := fio.NewWifConnect(wif, nodeos)
-	acc, api, _, err := fio.NewWifConnect(wif, nodeos)
+	acc, api, opt, err := fio.NewWifConnect(wif, nodeos)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,23 +51,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//if update := needsBaseFees(actor, api); update != nil {
-		//act := fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm), fio.SetFeeVote{
-		//	FeeRatios: update,
-		//	Actor:     string(actor),
-		//	MaxFee:    fio.Tokens(fio.GetMaxFee(fio.FeeSetFeeVote)),
-		//})
-		//j, _ := json.MarshalIndent(act, "", "  ")
-		//fmt.Println(string(j))
-		//trx := fio.NewTransaction([]*fio.Action{act}, opt)
-		//resp, err := api.SignPushTransaction(trx, opt.ChainID, fio.CompressionNone)
-		a := fio.NewSetFeeVote(defaultFee(), acc.Actor)
-		resp, err := api.SignPushActions(a)
+	if update := needsBaseFees(actor, api); update != nil {
+		// Absolutely need to compress or we cannot submit:
+		opt.Compress = fio.CompressionZlib
+		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
 		if err != nil {
-			log.Println(resp)
 			log.Fatal(err)
 		}
-	//}
+	}
 
 	prices := getGecko()
 	if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
@@ -85,20 +76,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if current != 0 && multiplier / current <= 0.5 && multiplier >= 2.5 {
-		log.Fatal("New fee would be more than a 50% change, please set it manually to continue automatically adjusting fees")
-	}
+	if math.Abs(current - multiplier) > 0.1 {
+		if current != 0 && (multiplier / current <= 0.5 || multiplier >= 2.5) {
+			log.Fatal("New fee multiplier would be more than a 50% change, please set it manually to continue automatically adjusting fees")
+		}
 
-	act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
-		Multiplier: multiplier,
-		Actor:      string(actor),
-		MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeUpdateFeeMult)),
-	})
-	resp, err = api.SignPushActions(act)
-	if err != nil {
-		log.Println(resp)
-		log.Println(err)
-		//log.Fatal(err)
+		act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
+			Multiplier: multiplier,
+			Actor:      actor,
+			MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeSubmitFeeMult)),
+		})
+		resp, err := api.SignPushActions(act)
+		if err != nil {
+			log.Println(resp)
+			log.Println(err)
+			// don't bail, try the ComputeFees call on the way out
+		}
+	} else {
+		log.Println("Fee has not changed enough to re-submit")
+		os.Exit(0)
 	}
 
 	// this can fail silently
@@ -109,9 +105,9 @@ func main() {
 
 }
 
-func defaultFee() []fio.FeeValue {
+func defaultFee() []*fio.FeeValue {
 	// FIXME: this smells. Should it be in a config file? Makes running as an AWS lambda harder, rethink it later.
-	defaults := []fio.FeeValue{
+	defaults := []*fio.FeeValue{
 		{
 			EndPoint: "register_fio_domain",
 			Value:    40000000000,
@@ -250,7 +246,7 @@ func defaultFee() []fio.FeeValue {
 		},
 		{
 			EndPoint: "submit_fee_ratios",
-			Value:    60000000,
+			Value:    0, // overriding the default, if we do this often it should be cheap!
 		},
 		{
 			EndPoint: "burn_fio_address",
@@ -277,7 +273,7 @@ func getRegFioAddrCost() uint64 {
 
 // needsBaseFees checks the current feevotes2 table and returns a nil if fees are set as expected.
 // otherwise, the returned value should be submitted.
-func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []fio.FeeValue) {
+func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValue) {
 	defaults := defaultFee()
 
 	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
