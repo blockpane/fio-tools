@@ -47,6 +47,22 @@ func main() {
 	restored := make(chan bool)               // notification that other node is signing blocks, and to stop local production
 	failing := make(chan error)               // errors from routines, too many errors triggers a restart
 
+	// ensure the node is synced before doing anything
+	for {
+		gi, err := api.GetInfo()
+		if err != nil {
+			log.Println(err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		if gi.HeadBlockTime.Before(time.Now().Add(-2*time.Minute)) {
+			log.Printf("Node appears to be syncing, current head is %s, waiting for sync", gi.HeadBlockTime.String())
+			time.Sleep(time.Minute)
+		} else {
+			break
+		}
+	}
+
 	// pass around a common block so multiple routines aren't hammering the endpoint.
 	block := &blockNumProd{}
 	go func() {
@@ -259,6 +275,11 @@ func missedRound(block *blockNumProd, api *fio.API, bp eos.AccountName, missing 
 		bhs, err := api.GetBlockHeaderState(block.BlockNum)
 		if err != nil {
 			failed <- err
+			continue
+		}
+		if bhs.PendingSchedule == nil {
+			// may not be synced
+			time.Sleep(time.Minute)
 			continue
 		}
 		// ensure at least a full round on this schedule before checking
