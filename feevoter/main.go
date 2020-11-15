@@ -22,8 +22,8 @@ const gecko = `https://api.coingecko.com/api/v3/coins/fio-protocol?localization=
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	// this allows running as either a command line function or as an AWS Lambda function:
-	// if running as a lambda, use the env vars to set options, preferably using encrypted params to pass in the WIF
+	// this allows running as either a daemon or as an AWS Lambda function:
+	// if running as a lambda, use the env vars to set options, preferably using encrypted SSM params to pass in the WIF
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		lambda.Start(handler)
 		return
@@ -62,10 +62,9 @@ func handler() error {
 	}
 
 	if wif == "" || nodeos == "" {
-		log.Println("Missing URL or WIF environment variable.")
 		fmt.Print("\nOptions:\n")
 		flag.PrintDefaults()
-		os.Exit(1)
+		return errors.New("missing URL or WIF environment variable")
 	}
 
 	acc, api, opt, err := fio.NewWifConnect(wif, nodeos)
@@ -92,7 +91,11 @@ func handler() error {
 		return err
 	}
 
-	if update := needsBaseFees(actor, api); update != nil {
+	update, err := needsBaseFees(actor, api)
+	if err != nil && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		return err
+	}
+	if update != nil {
 		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
@@ -102,30 +105,36 @@ func handler() error {
 		}
 	}
 
-	setMultiplier := func() {
-		prices := getGecko()
+	setMultiplier := func() error {
+		prices, err := getGecko()
+		if err != nil {
+			return err
+		}
 		if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
-			log.Println("coingecko data was stale, aborting")
-			return
+			return errors.New("coingecko data was stale, aborting")
 		}
 		avg, err := prices.GetAvg()
 		if err != nil {
-			log.Println(err)
-			return
+			return err
 		}
 
-		defaultFee := float64(getRegFioAddrCost()) / 1_000_000_000.0
+		df, err := getRegFioAddrCost()
+		if err != nil {
+			return err
+		}
+		defaultFee := float64(df) / 1_000_000_000.0
 		multiplier := target / (defaultFee * avg)
 
 		current, err := GetCurMult(actor, api)
 		if err != nil {
-			log.Println(err)
-			return
+			return err
 		}
-		if math.Abs(current-multiplier) > 0.1 {
-			if current != 0 && (math.Abs(current-multiplier)/current > 0.15) {
+		// don't submit for tiny changes
+		if math.Abs(current-multiplier) > 0.15 {
+			// don't submit for huge changes
+			if current != 0 && (math.Abs(current-multiplier)/current > 0.25) {
 				log.Println("current fee is:", current, "proposed fee is:", multiplier)
-				log.Fatal("New fee multiplier would be more than a 15% change, please set it manually to continue automatically adjusting fees")
+				return errors.New("new fee multiplier would be more than a 25% change, please set it manually to continue automatically adjusting fees")
 			}
 
 			act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
@@ -133,15 +142,14 @@ func handler() error {
 				Actor:      actor,
 				MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeSubmitFeeMult)),
 			})
-			resp, err := api.SignPushActions(act)
+			_, err := api.SignPushActions(act)
 			if err != nil {
-				log.Println(resp)
 				log.Println(err)
 				// don't bail, try the ComputeFees call on the way out
 			}
 		} else {
-			log.Printf("Fee has not changed enough to re-submit: existing %f, proposed %f\n", current, multiplier)
-			return
+			log.Printf("Multiplier has not changed enough to re-submit: existing %f, proposed %f\n", current, multiplier)
+			return nil
 		}
 
 		// this can fail silently
@@ -149,21 +157,23 @@ func handler() error {
 		if err != nil {
 			log.Println("Compute fees failed (can safely ignore): ", err.Error())
 		}
-	}
-
-	setMultiplier()
-	// don't loop if running as lambda function
-	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		return nil
 	}
-	ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
+
+	err = setMultiplier()
+	// don't loop if running as lambda function
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		return err
+	}
+	ticker := time.NewTicker(time.Duration(frequency) * time.Hour)
 	for {
 		select {
 		case <-ticker.C:
-			setMultiplier()
+			if err = setMultiplier(); err != nil {
+				log.Println(err)
+			}
 		}
 	}
-	return nil
 }
 
 func defaultFee() []*fio.FeeValue {
@@ -208,20 +218,19 @@ func defaultFee() []*fio.FeeValue {
 	return defaults
 }
 
-func getRegFioAddrCost() uint64 {
+func getRegFioAddrCost() (uint64, error) {
 	fees := defaultFee()
 	for i := range fees {
 		if fees[i].EndPoint == "register_fio_address" {
-			return uint64(fees[i].Value)
+			return uint64(fees[i].Value), nil
 		}
 	}
-	log.Fatal("could not determine default value for register_fio_address, aborting")
-	return 0 // unreachable, but don't let compiler complain
+	return 0, errors.New("could not determine default value for register_fio_address, aborting")
 }
 
 // needsBaseFees checks the current feevotes2 table and returns a nil if fees are set as expected.
 // otherwise, the returned value should be submitted.
-func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValue) {
+func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValue, err error) {
 	defaults := defaultFee()
 
 	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
@@ -236,7 +245,7 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 		JSON:       true,
 	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	type ev struct {
 		Feevotes []struct {
@@ -247,11 +256,11 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 	maybeBlanks := make([]ev, 0)
 	err = json.Unmarshal(gtr.Rows, &maybeBlanks)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	existing := make([]fio.FeeValue, 0)
 	if maybeBlanks == nil || len(maybeBlanks) == 0 || maybeBlanks[0].Feevotes == nil {
-		return defaultFee()
+		return defaultFee(), nil
 	}
 	for _, v := range maybeBlanks[0].Feevotes {
 		if v.EndPoint == "" || v.Value < 0 {
@@ -264,7 +273,7 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 	})
 	if len(existing) != len(defaults) {
 		log.Printf("different number of fee values on-chain (%d) vs desired (%d)", len(existing), len(defaults))
-		return defaults
+		return defaults, nil
 	}
 	for i := range existing {
 		var sendDefault bool
@@ -273,10 +282,10 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 			sendDefault = true
 		}
 		if sendDefault {
-			return defaults
+			return defaults, nil
 		}
 	}
-	return nil
+	return nil, errors.New("unknown error checking feevote")
 }
 
 // coinTicker holds a trimmed down response from the coingecko api
@@ -290,22 +299,22 @@ type coinTick struct {
 	Last   float64 `json:"last"`
 }
 
-func getGecko() *coinTicker {
+func getGecko() (*coinTicker, error) {
 	resp, err := http.Get(gecko)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	j, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	t := &coinTicker{}
 	err = json.Unmarshal(j, t)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return t
+	return t, nil
 }
 
 // GetAvg finds all the current USDT exchange rates and calculates an average price
