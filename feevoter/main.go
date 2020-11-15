@@ -43,7 +43,7 @@ func handler() error {
 	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, or TARGET env var")
 	flag.Parse()
 
-	if a == ""{
+	if a == "" {
 		a = os.Getenv("ACTOR")
 	}
 	if p == "" {
@@ -100,14 +100,6 @@ func handler() error {
 		}
 	}
 
-	prices := getGecko()
-	if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
-		log.Fatal("coingecko data was stale, aborting")
-	}
-	avg, err := prices.GetAvg()
-	if err != nil {
-		return err
-	}
 	setMultiplier := func() {
 		prices := getGecko()
 		if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
@@ -155,12 +147,13 @@ func handler() error {
 		if err != nil {
 			log.Println("Compute fees failed (can safely ignore): ", err.Error())
 		}
-	} else {
-		log.Println("Fee has not changed enough to re-submit")
-		return nil
 	}
 
 	setMultiplier()
+	// don't loop if running as lambda function
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		return nil
+	}
 	ticker := time.NewTicker(60 * time.Minute)
 	for {
 		select {
@@ -172,7 +165,6 @@ func handler() error {
 }
 
 func defaultFee() []*fio.FeeValue {
-	// FIXME: this smells. Should it be in a config file? Makes running as an AWS lambda harder, rethink it later.
 	defaults := []*fio.FeeValue{
 		{EndPoint: "add_pub_address", Value: 30000000},
 		{EndPoint: "add_to_whitelist", Value: 30000000},
@@ -203,7 +195,7 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "set_fio_domain_public", Value: 30000000},
 		{EndPoint: "submit_bundled_transaction", Value: 30000000},
 		{EndPoint: "submit_fee_multiplier", Value: 60000000},
-		{EndPoint: "submit_fee_ratios", Value: 5000000}, // override default: if we call this often, want a low price
+		{EndPoint: "submit_fee_ratios", Value: 10000000},
 		{EndPoint: "transfer_fio_address", Value: 60000000},
 		{EndPoint: "transfer_fio_domain", Value: 100000000},
 		{EndPoint: "transfer_tokens_pub_key", Value: 100000000},
@@ -245,9 +237,9 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 		panic(err)
 	}
 	type ev struct {
-		Feevotes []struct{
+		Feevotes []struct {
 			EndPoint string `json:"end_point"`
-			Value int64 `json:"value"`
+			Value    int64  `json:"value"`
 		} `json:"feevotes"`
 	}
 	maybeBlanks := make([]ev, 0)
@@ -256,11 +248,14 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 		panic(err)
 	}
 	existing := make([]fio.FeeValue, 0)
+	if maybeBlanks == nil || len(maybeBlanks) == 0 || maybeBlanks[0].Feevotes == nil {
+		return defaultFee()
+	}
 	for _, v := range maybeBlanks[0].Feevotes {
 		if v.EndPoint == "" || v.Value < 0 {
 			continue
 		}
-		existing = append(existing, fio.FeeValue{EndPoint: v.EndPoint, Value: uint64(v.Value)})
+		existing = append(existing, fio.FeeValue{EndPoint: v.EndPoint, Value: v.Value})
 	}
 	sort.Slice(existing, func(i, j int) bool {
 		return defaults[i].EndPoint < defaults[j].EndPoint
