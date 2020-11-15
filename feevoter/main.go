@@ -52,211 +52,114 @@ func main() {
 	}
 
 	if update := needsBaseFees(actor, api); update != nil {
-		// Absolutely need to compress or we cannot submit:
+		// compress so not as large
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
 		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	prices := getGecko()
-	if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
-		log.Fatal("coingecko data was stale, aborting")
-	}
-	avg, err := prices.GetAvg()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defaultFee := float64(getRegFioAddrCost()) / 1_000_000_000.0
-	multiplier := target / (defaultFee * avg)
-
-	current, err := GetCurMult(actor, api)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if math.Abs(current - multiplier) > 0.1 {
-		if current != 0 && (multiplier / current <= 0.5 || multiplier >= 2.5) {
-			log.Fatal("New fee multiplier would be more than a 50% change, please set it manually to continue automatically adjusting fees")
-		}
-
-		act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
-			Multiplier: multiplier,
-			Actor:      actor,
-			MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeSubmitFeeMult)),
-		})
-		resp, err := api.SignPushActions(act)
-		if err != nil {
-			log.Println(resp)
 			log.Println(err)
-			// don't bail, try the ComputeFees call on the way out
+			log.Println("Could not update base fees, has it been an hour? Continuing anyway")
 		}
-	} else {
-		log.Println("Fee has not changed enough to re-submit")
-		os.Exit(0)
 	}
 
-	// this can fail silently
-	_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
-	if err != nil {
-		log.Println("Compute fees failed (can safely ignore): ", err.Error())
+	setMultiplier := func() {
+		prices := getGecko()
+		if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
+			log.Println("coingecko data was stale, aborting")
+			return
+		}
+		avg, err := prices.GetAvg()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		defaultFee := float64(getRegFioAddrCost()) / 1_000_000_000.0
+		multiplier := target / (defaultFee * avg)
+
+		current, err := GetCurMult(actor, api)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if math.Abs(current-multiplier) > 0.1 {
+			if current != 0 && (math.Abs(current-multiplier)/current > 0.15) {
+				log.Println("current fee is:", current, "proposed fee is:", multiplier)
+				log.Fatal("New fee multiplier would be more than a 15% change, please set it manually to continue automatically adjusting fees")
+			}
+
+			act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
+				Multiplier: multiplier,
+				Actor:      actor,
+				MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeSubmitFeeMult)),
+			})
+			resp, err := api.SignPushActions(act)
+			if err != nil {
+				log.Println(resp)
+				log.Println(err)
+				// don't bail, try the ComputeFees call on the way out
+			}
+		} else {
+			log.Printf("Fee has not changed enough to re-submit: existing %f, proposed %f\n", current, multiplier)
+			return
+		}
+
+		// this can fail silently
+		_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
+		if err != nil {
+			log.Println("Compute fees failed (can safely ignore): ", err.Error())
+		}
 	}
 
+	setMultiplier()
+	ticker := time.NewTicker(60 * time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			setMultiplier()
+		}
+	}
 }
 
 func defaultFee() []*fio.FeeValue {
 	// FIXME: this smells. Should it be in a config file? Makes running as an AWS lambda harder, rethink it later.
 	defaults := []*fio.FeeValue{
-		{
-			EndPoint: "register_fio_domain",
-			Value:    40000000000,
-		},
-		{
-			EndPoint: "register_fio_address",
-			Value:    2000000000,
-		},
-		{
-			EndPoint: "renew_fio_domain",
-			Value:    40000000000,
-		},
-		{
-			EndPoint: "renew_fio_address",
-			Value:    2000000000,
-		},
-		{
-			EndPoint: "add_pub_address",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "transfer_tokens_pub_key",
-			Value:    100000000,
-		},
-		{
-			EndPoint: "new_funds_request",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "reject_funds_request",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "record_obt_data",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "set_fio_domain_public",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "register_producer",
-			Value:    10000000000,
-		},
-		{
-			EndPoint: "register_proxy",
-			Value:    1000000000,
-		},
-		{
-			EndPoint: "unregister_proxy",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "unregister_producer",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "proxy_vote",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "vote_producer",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "add_to_whitelist",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "remove_from_whitelist",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "submit_bundled_transaction",
-			Value:    30000000,
-		},
-		{
-			EndPoint: "auth_delete",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "auth_link",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "auth_update",
-			Value:    50000000,
-		},
-		{
-			EndPoint: "msig_propose",
-			Value:    50000000,
-		},
-		{
-			EndPoint: "msig_approve",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "msig_unapprove",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "msig_cancel",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "msig_exec",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "msig_invalidate",
-			Value:    20000000,
-		},
-		{
-			EndPoint: "cancel_funds_request",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "remove_pub_address",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "remove_all_pub_addresses",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "transfer_fio_domain",
-			Value:    100000000,
-		},
-		{
-			EndPoint: "transfer_fio_address",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "submit_fee_multiplier",
-			Value:    60000000,
-		},
-		{
-			EndPoint: "submit_fee_ratios",
-			Value:    0, // overriding the default, if we do this often it should be cheap!
-		},
-		{
-			EndPoint: "burn_fio_address",
-			Value:    60000000,
-		},
+		{EndPoint: "add_pub_address", Value: 30000000},
+		{EndPoint: "add_to_whitelist", Value: 30000000},
+		{EndPoint: "auth_delete", Value: 20000000},
+		{EndPoint: "auth_link", Value: 20000000},
+		{EndPoint: "auth_update", Value: 50000000},
+		{EndPoint: "burn_fio_address", Value: 60000000},
+		{EndPoint: "cancel_funds_request", Value: 60000000},
+		{EndPoint: "msig_approve", Value: 20000000},
+		{EndPoint: "msig_cancel", Value: 20000000},
+		{EndPoint: "msig_exec", Value: 20000000},
+		{EndPoint: "msig_invalidate", Value: 20000000},
+		{EndPoint: "msig_propose", Value: 50000000},
+		{EndPoint: "msig_unapprove", Value: 20000000},
+		{EndPoint: "new_funds_request", Value: 60000000},
+		{EndPoint: "proxy_vote", Value: 30000000},
+		{EndPoint: "record_obt_data", Value: 60000000},
+		{EndPoint: "register_fio_address", Value: 2000000000},
+		{EndPoint: "register_fio_domain", Value: 40000000000},
+		{EndPoint: "register_producer", Value: 10000000000},
+		{EndPoint: "register_proxy", Value: 1000000000},
+		{EndPoint: "reject_funds_request", Value: 30000000},
+		{EndPoint: "remove_all_pub_addresses", Value: 60000000},
+		{EndPoint: "remove_from_whitelist", Value: 30000000},
+		{EndPoint: "remove_pub_address", Value: 60000000},
+		{EndPoint: "renew_fio_address", Value: 2000000000},
+		{EndPoint: "renew_fio_domain", Value: 40000000000},
+		{EndPoint: "set_fio_domain_public", Value: 30000000},
+		{EndPoint: "submit_bundled_transaction", Value: 30000000},
+		{EndPoint: "submit_fee_multiplier", Value: 60000000},
+		{EndPoint: "submit_fee_ratios", Value: 5000000}, // override default: if we call this often, want a low price
+		{EndPoint: "transfer_fio_address", Value: 60000000},
+		{EndPoint: "transfer_fio_domain", Value: 100000000},
+		{EndPoint: "transfer_tokens_pub_key", Value: 100000000},
+		{EndPoint: "unregister_producer", Value: 20000000},
+		{EndPoint: "unregister_proxy", Value: 20000000},
+		{EndPoint: "vote_producer", Value: 30000000},
 	}
-	// yes, I am this lazy, needs to be deterministic and I'm not going to bother with a copy/sort/paste of the slice.
-	sort.Slice(defaults, func(i, j int) bool {
-		return defaults[i].EndPoint < defaults[j].EndPoint
-	})
 	return defaults
 }
 
@@ -290,26 +193,38 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 	if err != nil {
 		panic(err)
 	}
-	maybeBlanks := make([]fio.FeeValue, 0)
+	type ev struct {
+		Feevotes []struct{
+			EndPoint string `json:"end_point"`
+			Value int64 `json:"value"`
+		} `json:"feevotes"`
+	}
+	maybeBlanks := make([]ev, 0)
 	err = json.Unmarshal(gtr.Rows, &maybeBlanks)
 	if err != nil {
 		panic(err)
 	}
 	existing := make([]fio.FeeValue, 0)
-	for i := range maybeBlanks {
-		if maybeBlanks[i].EndPoint == "" {
+	for _, v := range maybeBlanks[0].Feevotes {
+		if v.EndPoint == "" || v.Value < 0 {
 			continue
 		}
-		existing = append(existing, maybeBlanks[i])
+		existing = append(existing, fio.FeeValue{EndPoint: v.EndPoint, Value: uint64(v.Value)})
 	}
 	sort.Slice(existing, func(i, j int) bool {
 		return defaults[i].EndPoint < defaults[j].EndPoint
 	})
 	if len(existing) != len(defaults) {
+		log.Printf("different number of fee values on-chain (%d) vs desired (%d)", len(existing), len(defaults))
 		return defaults
 	}
 	for i := range existing {
+		var sendDefault bool
 		if existing[i].EndPoint != defaults[i].EndPoint || existing[i].Value != defaults[i].Value {
+			log.Println("on-chain data differs for fee endpoint:", existing[i].EndPoint)
+			sendDefault = true
+		}
+		if sendDefault {
 			return defaults
 		}
 	}
@@ -349,7 +264,7 @@ func getGecko() *ticker {
 func (t *ticker) GetAvg() (float64, error) {
 	var total, count float64
 	for i := range t.Tickers {
-		if t.Tickers[i].Target == "USDT" {
+		if t.Tickers[i].Target == "USDT" || t.Tickers[i].Target == "USDC" {
 			count += 1
 			total += t.Tickers[i].Last
 		}
