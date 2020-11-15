@@ -36,11 +36,13 @@ func main() {
 
 func handler() error {
 	var a, p, wif, nodeos, sTarget string
+	var frequency int
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, or ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, or PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, or WIF env var")
-	flag.StringVar(&nodeos, "url", "https://fio.blockpane.com", "optional: nodeos api url, or URL env var")
+	flag.StringVar(&nodeos, "url", "", "optional: nodeos api url, or URL env var")
 	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, or TARGET env var")
+	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
 	flag.Parse()
 
 	if a == "" {
@@ -60,7 +62,7 @@ func handler() error {
 	}
 
 	if wif == "" || nodeos == "" {
-		log.Println("Missing NODEOS or WIF environment variable.")
+		log.Println("Missing URL or WIF environment variable.")
 		fmt.Print("\nOptions:\n")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -154,7 +156,7 @@ func handler() error {
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		return nil
 	}
-	ticker := time.NewTicker(60 * time.Minute)
+	ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -194,8 +196,8 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "renew_fio_domain", Value: 40000000000},
 		{EndPoint: "set_fio_domain_public", Value: 30000000},
 		{EndPoint: "submit_bundled_transaction", Value: 30000000},
-		{EndPoint: "submit_fee_multiplier", Value: 60000000},
-		{EndPoint: "submit_fee_ratios", Value: 10000000},
+		{EndPoint: "submit_fee_multiplier", Value: 10000000},
+		{EndPoint: "submit_fee_ratios", Value: 70000000},
 		{EndPoint: "transfer_fio_address", Value: 60000000},
 		{EndPoint: "transfer_fio_domain", Value: 100000000},
 		{EndPoint: "transfer_tokens_pub_key", Value: 100000000},
@@ -277,18 +279,18 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 	return nil
 }
 
-// ticker holds a trimmed down response from the coingecko api
-type ticker struct {
-	LastUpdated time.Time `json:"last_updated"`
-	Tickers     []tick    `json:"tickers"`
+// coinTicker holds a trimmed down response from the coingecko api
+type coinTicker struct {
+	LastUpdated time.Time  `json:"last_updated"`
+	Tickers     []coinTick `json:"tickers"`
 }
 
-type tick struct {
+type coinTick struct {
 	Target string  `json:"target"`
 	Last   float64 `json:"last"`
 }
 
-func getGecko() *ticker {
+func getGecko() *coinTicker {
 	resp, err := http.Get(gecko)
 	if err != nil {
 		log.Fatal(err)
@@ -298,7 +300,7 @@ func getGecko() *ticker {
 	if err != nil {
 		log.Fatal(err)
 	}
-	t := &ticker{}
+	t := &coinTicker{}
 	err = json.Unmarshal(j, t)
 	if err != nil {
 		log.Fatal(err)
@@ -307,7 +309,7 @@ func getGecko() *ticker {
 }
 
 // GetAvg finds all the current USDT exchange rates and calculates an average price
-func (t *ticker) GetAvg() (float64, error) {
+func (t *coinTicker) GetAvg() (float64, error) {
 	var total, count float64
 	for i := range t.Tickers {
 		if t.Tickers[i].Target == "USDT" || t.Tickers[i].Target == "USDC" {
