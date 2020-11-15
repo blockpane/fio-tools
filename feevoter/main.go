@@ -37,12 +37,14 @@ func main() {
 func handler() error {
 	var a, p, wif, nodeos, sTarget string
 	var frequency int
+	var once bool
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, or ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, or PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, or WIF env var")
 	flag.StringVar(&nodeos, "url", "", "optional: nodeos api url, or URL env var")
 	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, or TARGET env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
+	flag.BoolVar(&once, "q", false, "optional: quit after running once (does not apply to AWS Lambda")
 	flag.Parse()
 
 	if a == "" {
@@ -92,7 +94,7 @@ func handler() error {
 	}
 
 	update, err := needsBaseFees(actor, api)
-	if err != nil && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+	if err != nil && (os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" || once) {
 		return err
 	}
 	if update != nil {
@@ -162,7 +164,7 @@ func handler() error {
 
 	err = setMultiplier()
 	// don't loop if running as lambda function
-	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" || once {
 		return err
 	}
 	ticker := time.NewTicker(time.Duration(frequency) * time.Hour)
@@ -206,7 +208,7 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "renew_fio_domain", Value: 40000000000},
 		{EndPoint: "set_fio_domain_public", Value: 30000000},
 		{EndPoint: "submit_bundled_transaction", Value: 30000000},
-		{EndPoint: "submit_fee_multiplier", Value: 10000000},
+		{EndPoint: "submit_fee_multiplier", Value: 10000000}, // I'm overriding the default here, this should be cheap.
 		{EndPoint: "submit_fee_ratios", Value: 70000000},
 		{EndPoint: "transfer_fio_address", Value: 60000000},
 		{EndPoint: "transfer_fio_domain", Value: 100000000},
