@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
+	"fmt"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"io/ioutil"
@@ -19,21 +22,57 @@ const gecko = `https://api.coingecko.com/api/v3/coins/fio-protocol?localization=
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// this allows running as either a command line function or as an AWS Lambda function:
+	// if running as a lambda, use the env vars to set options, preferably using encrypted params to pass in the WIF
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		lambda.Start(handler)
+		return
+	}
+	if e := handler(); e != nil {
+		trace := log.Output(2, e.Error())
+		log.Fatal(trace)
+	}
+}
 
-	actor := eos.AccountName(os.Getenv("ACTOR"))
-	perm := eos.PermissionName(os.Getenv("PERM"))
-	wif := os.Getenv("WIF")
-	nodeos := os.Getenv("NODEOS")
-	sTarget := os.Getenv("TARGET")
+func handler() error {
+	var a, p, wif, nodeos, sTarget string
+	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, or ACTOR env var")
+	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, or PERM env var")
+	flag.StringVar(&wif, "wif", "", "required: private key, or WIF env var")
+	flag.StringVar(&nodeos, "url", "https://fio.blockpane.com", "optional: nodeos api url, or URL env var")
+	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, or TARGET env var")
+	flag.Parse()
+
+	if a == ""{
+		a = os.Getenv("ACTOR")
+	}
+	if p == "" {
+		p = os.Getenv("PERM")
+	}
+	if wif == "" {
+		wif = os.Getenv("WIF")
+	}
+	if nodeos == "" {
+		nodeos = os.Getenv("URL")
+	}
+	if sTarget == "" {
+		sTarget = os.Getenv("TARGET")
+	}
 
 	if wif == "" || nodeos == "" {
-		log.Fatal("Missing NODEOS or WIF environment variable.")
+		log.Println("Missing NODEOS or WIF environment variable.")
+		fmt.Print("\nOptions:\n")
+		flag.PrintDefaults()
+		os.Exit(1)
 	}
 
 	acc, api, opt, err := fio.NewWifConnect(wif, nodeos)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	actor := eos.AccountName(a)
+	perm := eos.PermissionName(p)
 
 	if string(actor) == "" {
 		actor = acc.Actor
@@ -48,15 +87,15 @@ func main() {
 	target, err := strconv.ParseFloat(sTarget, 64)
 	if err != nil {
 		log.Println("could not parse target price")
-		log.Fatal(err)
+		return err
 	}
 
 	if update := needsBaseFees(actor, api); update != nil {
-		// Absolutely need to compress or we cannot submit:
+		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
@@ -66,7 +105,7 @@ func main() {
 	}
 	avg, err := prices.GetAvg()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	defaultFee := float64(getRegFioAddrCost()) / 1_000_000_000.0
@@ -74,7 +113,7 @@ func main() {
 
 	current, err := GetCurMult(actor, api)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if math.Abs(current - multiplier) > 0.1 {
 		if current != 0 && (multiplier / current <= 0.5 || multiplier >= 2.5) {
@@ -94,7 +133,7 @@ func main() {
 		}
 	} else {
 		log.Println("Fee has not changed enough to re-submit")
-		os.Exit(0)
+		return nil
 	}
 
 	// this can fail silently
@@ -102,7 +141,7 @@ func main() {
 	if err != nil {
 		log.Println("Compute fees failed (can safely ignore): ", err.Error())
 	}
-
+	return nil
 }
 
 func defaultFee() []*fio.FeeValue {
@@ -264,7 +303,7 @@ func getRegFioAddrCost() uint64 {
 	fees := defaultFee()
 	for i := range fees {
 		if fees[i].EndPoint == "register_fio_address" {
-			return fees[i].Value
+			return uint64(fees[i].Value)
 		}
 	}
 	log.Fatal("could not determine default value for register_fio_address, aborting")
