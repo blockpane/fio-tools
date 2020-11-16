@@ -96,6 +96,7 @@ type BpRank struct {
 	bpSignKey string
 
 	FeeVote   int `json:"fee_vote_30d"`
+	Compute   int `json:"compute"`
 	Msig      int `json:"msig_30d"`
 	BpClaim   int `json:"bpclaim_1d"`
 	TpidClaim int `json:"tpidclaim_1d"`
@@ -134,7 +135,7 @@ func (bp *BpRank) score() {
 		}
 	}
 	//  extra rewards for msig, and feevoting
-	bp.Score += (3 * bp.Msig) + (2 * bp.FeeVote) + bp.BpClaim + bp.Burn + bp.CpuScore
+	bp.Score += (3 * bp.Msig) + (2 * bp.FeeVote) + bp.BpClaim + bp.Burn + bp.CpuScore + bp.Compute
 }
 
 func (bp *BpRank) getBpJson(api *fio.API) error {
@@ -235,26 +236,26 @@ func (bp *BpRank) getHistory(api *fio.API) error {
 			switch act {
 			case "bundlevote", "setfeemult", "setfeevote":
 				bp.FeeVote += 1
-				//dups[at.Actions[i].Trace.TransactionID.String()] = true
+			case "computefees":
+				// limit boost for calling computefees since it's free
+				if at.Actions[i].BlockNum >= oneDay && bp.Compute < 8 {
+					bp.Compute += 1
+				}
 			case "bpclaim":
 				if at.Actions[i].BlockNum >= oneDay {
 					bp.BpClaim += 1
-					//dups[at.Actions[i].Trace.TransactionID.String()] = true
 				}
 			case "tpidclaim":
 				if at.Actions[i].BlockNum >= oneDay {
 					bp.TpidClaim += 1
-					//dups[at.Actions[i].Trace.TransactionID.String()] = true
 				}
 			case "burnexpired":
 				if at.Actions[i].BlockNum >= oneDay {
 					bp.Burn += 1
-					//dups[at.Actions[i].Trace.TransactionID.String()] = true
 				}
 			case "propose", "approve", "exec":
 				bp.Msig += 1
 				fmt.Println(at.Actions[i].Trace.TransactionID.String(), bp.Address)
-				//dups[at.Actions[i].Trace.TransactionID.String()] = true
 			}
 			for _, auth := range at.Actions[i].Trace.Action.Authorization {
 				if bp.Account == auth.Actor && string(auth.Permission) != "active" {
