@@ -76,6 +76,7 @@ func main() {
 				failing <- err
 				continue
 			}
+			block.BlockHeadTime = info.HeadBlockTime.Time
 			b, err = api.GetBlockByNum(info.HeadBlockNum)
 			if err != nil {
 				failing <- err
@@ -112,7 +113,7 @@ func main() {
 	)
 
 	startProducing := func() bool {
-		if unhealthy || !active {
+		if unhealthy || !active || block.syncing() {
 			return false
 		}
 		unhealthy = true
@@ -196,11 +197,19 @@ type neighbor struct {
 type blockNumProd struct {
 	Producer        string
 	BlockNum        uint32
+	BlockHeadTime   time.Time
 	ScheduleVersion uint32
 }
 
+func (b blockNumProd) syncing() bool {
+	if b.BlockHeadTime.Before(time.Now().Add(-time.Minute)) {
+		return true
+	}
+	return false
+}
+
 func missedByOrder(neighbors *neighbor, block *blockNumProd, bp eos.AccountName, missing chan bool, healthy chan string) {
-	for neighbors.Before == "" || block == nil {
+	for neighbors.Before == "" || block == nil || block.syncing() {
 		time.Sleep(5 * time.Second)
 		log.Println("missed block detection not started, waiting for data")
 	}
@@ -213,7 +222,7 @@ func missedByOrder(neighbors *neighbor, block *blockNumProd, bp eos.AccountName,
 	for {
 		select {
 		case <-t.C:
-			if busy {
+			if busy || block.syncing() {
 				continue
 			}
 			busy = true
@@ -257,7 +266,7 @@ func missedByOrder(neighbors *neighbor, block *blockNumProd, bp eos.AccountName,
 }
 
 func missedRound(block *blockNumProd, api *fio.API, bp eos.AccountName, missing chan bool, healthy chan string, failed chan error) {
-	for block == nil {
+	for block == nil || block.syncing() {
 		time.Sleep(time.Second)
 		log.Println("missed round detection not started, waiting for data")
 	}
@@ -277,7 +286,7 @@ func missedRound(block *blockNumProd, api *fio.API, bp eos.AccountName, missing 
 			failed <- err
 			continue
 		}
-		if bhs.PendingSchedule == nil {
+		if bhs.PendingSchedule == nil || block.syncing() {
 			// may not be synced
 			time.Sleep(time.Minute)
 			continue
