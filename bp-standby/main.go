@@ -55,7 +55,7 @@ func main() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if gi.HeadBlockTime.Before(time.Now().Add(-2*time.Minute)) {
+		if gi.HeadBlockTime.Before(time.Now().Add(-2 * time.Minute)) {
 			log.Printf("Node appears to be syncing, current head is %s, waiting for sync", gi.HeadBlockTime.String())
 			time.Sleep(time.Minute)
 		} else {
