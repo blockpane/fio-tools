@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -35,32 +36,40 @@ func main() {
 }
 
 func handler() error {
-	var a, p, wif, nodeos, sTarget string
+	var a, p, wif, nodeos, sTarget, customFees string
 	var frequency int
 	var once bool
-	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, or ACTOR env var")
-	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, or PERM env var")
-	flag.StringVar(&wif, "wif", "", "required: private key, or WIF env var")
-	flag.StringVar(&nodeos, "url", "", "optional: nodeos api url, or URL env var")
-	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, or TARGET env var")
+	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: $ACTOR env var")
+	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: $PERM env var")
+	flag.StringVar(&wif, "wif", "", "required: private key, alternate: $WIF env var")
+	flag.StringVar(&nodeos, "url", "", "optional: nodeos api url, alternate: $URL env var")
+	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $TARGET env var")
+	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: $JSON env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
-	flag.BoolVar(&once, "q", false, "optional: quit after running once (does not apply to AWS Lambda")
+	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
 	flag.Parse()
 
-	if a == "" {
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+		once = true
+	}
+
+	switch "" {
+	case a:
 		a = os.Getenv("ACTOR")
-	}
-	if p == "" {
+		fallthrough
+	case p:
 		p = os.Getenv("PERM")
-	}
-	if wif == "" {
+		fallthrough
+	case wif:
 		wif = os.Getenv("WIF")
-	}
-	if nodeos == "" {
+		fallthrough
+	case nodeos:
 		nodeos = os.Getenv("URL")
-	}
-	if sTarget == "" {
+		fallthrough
+	case sTarget:
 		sTarget = os.Getenv("TARGET")
+	case customFees:
+		customFees = os.Getenv("JSON")
 	}
 
 	if wif == "" || nodeos == "" {
@@ -77,13 +86,14 @@ func handler() error {
 	actor := eos.AccountName(a)
 	perm := eos.PermissionName(p)
 
-	if string(actor) == "" {
+	switch "" {
+	case string(actor):
 		actor = acc.Actor
-	}
-	if string(perm) == "" {
+		fallthrough
+	case string(perm):
 		perm = "active"
-	}
-	if sTarget == "" {
+		fallthrough
+	case sTarget:
 		sTarget = "2.0"
 	}
 
@@ -93,17 +103,46 @@ func handler() error {
 		return err
 	}
 
-	update, err := needsBaseFees(actor, api)
-	if err != nil && (os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" || once) {
-		return err
+	update := make([]*fio.FeeValue, 0)
+	switch "" {
+	case customFees:
+		update, err = needsBaseFees(nil, actor, api)
+		if err != nil && once {
+			return err
+		}
+	default:
+		custom := make([]*fio.FeeValue, 0)
+		f, err := os.OpenFile(customFees, os.O_RDONLY, 0644)
+		if err != nil {
+			log.Println("could not open custom fees")
+			return err
+		}
+		j, err := ioutil.ReadAll(f)
+		if err != nil {
+			return err
+		}
+		_ = f.Close()
+		err = json.Unmarshal(j, &update)
+		if err != nil {
+			log.Println("could not parse custom fees")
+			return err
+		}
+		update, err = needsBaseFees(custom, actor, api)
+		if err != nil && once {
+			return err
+		}
 	}
+
 	if update != nil {
+		log.Println("attempting feevote update")
 		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
 		if err != nil {
 			log.Println(err)
 			log.Println("Could not update base fees, has it been an hour? Continuing anyway")
+		} else {
+			log.Println("feevote updated")
 		}
 	}
 
@@ -154,26 +193,36 @@ func handler() error {
 			return nil
 		}
 
-		// this can fail silently
-		_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
-		if err != nil {
-			log.Println("Compute fees failed (can safely ignore): ", err.Error())
+		// this can fail without consequence, try to call it several times across multiple blocks.
+		for i := 0; i < 3; i++ {
+			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
+			if err != nil {
+				log.Println("Compute fees failed (can safely ignore): ", err.Error())
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
 		}
 		return nil
 	}
 
 	err = setMultiplier()
 	// don't loop if running as lambda function
-	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" || once {
+	if once {
 		return err
 	}
+	rand.Seed(time.Now().UnixNano()) // #nosec
 	ticker := time.NewTicker(time.Duration(frequency) * time.Hour)
 	for {
 		select {
 		case <-ticker.C:
-			if err = setMultiplier(); err != nil {
-				log.Println(err)
-			}
+			go func() {
+				// add some variability to when this starts, less predictability makes it less likely to be subjected
+				// to timing / flash attacks.
+				time.Sleep(time.Duration(rand.Intn(300)+1) * time.Second) // #nosec
+				if err = setMultiplier(); err != nil {
+					log.Println(err)
+				}
+			}()
 		}
 	}
 }
@@ -232,8 +281,10 @@ func getRegFioAddrCost() (uint64, error) {
 
 // needsBaseFees checks the current feevotes2 table and returns a nil if fees are set as expected.
 // otherwise, the returned value should be submitted.
-func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValue, err error) {
-	defaults := defaultFee()
+func needsBaseFees(fees []*fio.FeeValue, actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValue, err error) {
+	if fees == nil || len(fees) == 0 {
+		fees = defaultFee()
+	}
 
 	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
 		Code:       "fio.fee",
@@ -271,20 +322,20 @@ func needsBaseFees(actor eos.AccountName, api *fio.API) (proposed []*fio.FeeValu
 		existing = append(existing, fio.FeeValue{EndPoint: v.EndPoint, Value: v.Value})
 	}
 	sort.Slice(existing, func(i, j int) bool {
-		return defaults[i].EndPoint < defaults[j].EndPoint
+		return fees[i].EndPoint < fees[j].EndPoint
 	})
-	if len(existing) != len(defaults) {
-		log.Printf("different number of fee values on-chain (%d) vs desired (%d)", len(existing), len(defaults))
-		return defaults, nil
+	if len(existing) != len(fees) {
+		log.Printf("different number of fee values on-chain (%d) vs desired (%d)", len(existing), len(fees))
+		return fees, nil
 	}
 	for i := range existing {
 		var sendDefault bool
-		if existing[i].EndPoint != defaults[i].EndPoint || existing[i].Value != defaults[i].Value {
-			log.Println("on-chain data differs for fee endpoint:", existing[i].EndPoint)
+		if existing[i].EndPoint != fees[i].EndPoint || existing[i].Value != fees[i].Value {
+			log.Println("on-chain data differs for desired fee endpoint:", existing[i].EndPoint)
 			sendDefault = true
 		}
 		if sendDefault {
-			return defaults, nil
+			return fees, nil
 		}
 	}
 	return nil, errors.New("unknown error checking feevote")
