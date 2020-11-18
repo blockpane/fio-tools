@@ -68,6 +68,7 @@ func handler() error {
 		fallthrough
 	case sTarget:
 		sTarget = os.Getenv("TARGET")
+		fallthrough
 	case customFees:
 		customFees = os.Getenv("JSON")
 	}
