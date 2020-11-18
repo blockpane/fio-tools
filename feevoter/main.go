@@ -42,7 +42,7 @@ func handler() error {
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: $ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: $PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: $WIF env var")
-	flag.StringVar(&nodeos, "url", "", "optional: nodeos api url, alternate: $URL env var")
+	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: $URL env var")
 	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $TARGET env var")
 	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: $JSON env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
