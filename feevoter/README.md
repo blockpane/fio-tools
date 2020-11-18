@@ -10,6 +10,7 @@ This is a utility for setting FIO fees. It has the following features:
 1. When running as a daemon, will add a random delay between runs to reduce predictability.
 1. Accepts an alternate fee vote via JSON input file
 1. Calls computefees at end of each run (attempts 3 times, spaced at 500ms)
+1. Supports using delegated permissions (requires: fio.fee::setfeevote, fio.fee::setfeemultiplier, and fio.fee::computefees)
 
 ```
 Usage of feevoter

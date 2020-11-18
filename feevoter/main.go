@@ -138,7 +138,10 @@ func handler() error {
 		log.Println("attempting feevote update")
 		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
-		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewSetFeeVote(update, acc.Actor).ToEos()}, &opt.TxOptions)
+		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
+				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFee("submit_fee_vote")), Actor: actor},
+			).ToEos()}, &opt.TxOptions,
+		)
 		if err != nil {
 			log.Println(err)
 			log.Println("Could not update base fees, has it been an hour? Continuing anyway")
