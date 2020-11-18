@@ -139,7 +139,7 @@ func handler() error {
 		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
-				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFee("submit_fee_vote")), Actor: actor},
+				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFeeByAction("setfeevote")), Actor: actor},
 			).ToEos()}, &opt.TxOptions,
 		)
 		if err != nil {
