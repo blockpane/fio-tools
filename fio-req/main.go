@@ -78,9 +78,9 @@ func main() {
 	}
 
 	printErr := func() {
-		fmt.Println("fioreq is a utility for interacting with funds requests on the FIO blockchain.")
-		fmt.Println("Usage:\n\tfioreq -password <password> -c <command> <options> <request/response request>")
-		fmt.Println("\nuse 'fioreq -h' to show other options.")
+		fmt.Println("fio-req is a utility for interacting with funds requests on the FIO blockchain.")
+		fmt.Println("Usage:\n\tfio-req -password <password> -c <command> <options> <request/response request>")
+		fmt.Println("\nuse 'fio-req -h' to show other options.")
 		fmt.Println("Commands:")
 		fmt.Printf("  -c %9s - list available accounts\n", "list")
 		fmt.Printf("  -c %9s - show pending FIO requests\n", "pending")
@@ -604,29 +604,29 @@ func printExample() {
 	fmt.Println("------------------")
 	fmt.Printf("  %9s 'URL for FIO nodeos endpoint'\n", "-u")
 	fmt.Printf("  %9s 'password for keosd wallet'\n", "-password")
-	fmt.Printf("  %9s 'fioreq command'\n", "-c")
+	fmt.Printf("  %9s 'fio-req command'\n", "-c")
 	fmt.Printf("  %9s 'actor permission (account) for transaction'\n", "-p")
 	fmt.Printf("  %9s 'request ID for command'\n", "-id")
 	fmt.Printf("  %9s 'FIO Address that *recieves* funds'\n", "-payee")
 	fmt.Printf("  %9s 'FIO Address that *sends* funds'\n", "-payer")
 	fmt.Println("\n\nView available accounts from keosd:")
 	fmt.Println("-----------------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -c list")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -c list")
 	fmt.Println("\n\nView sent requests for an account:")
 	fmt.Println("----------------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c sent")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c sent")
 	fmt.Println("\n\nView pending requests for an account:")
 	fmt.Println("-------------------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c pending")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c pending")
 	fmt.Println("\n\nView details for a request (including response):")
 	fmt.Println("------------------------------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c view-req -id 123")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c view-req -id 123")
 	fmt.Println("\n\nReject a pending request")
 	fmt.Println("------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c reject -id 321")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c reject -id 321")
 	fmt.Println("\n\nRequest Payment:")
 	fmt.Println("----------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c request -payer shopper@fiotestnet -payee merchant@store '")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c request -payer shopper@fiotestnet -payee merchant@store '")
 	fmt.Println(`    {
       "payee_public_address": "0x42F6cA7898A0f29e17CB66190f9E9B9d26f7D635",
       "amount": "123.45",
@@ -636,7 +636,7 @@ func printExample() {
     }'`)
 	fmt.Println("\n\nRecord a transaction for a pending request")
 	fmt.Println("------------------------------------------")
-	fmt.Println("  fioreq -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c record -id 321 -payee merchant@store -payer shopper@fiotestnet '")
+	fmt.Println("  fio-req -u https://testnet.fioprotocol.io -password PW5xxxx.... -p aaaaaaaaaaaa -c record -id 321 -payee merchant@store -payer shopper@fiotestnet '")
 	fmt.Println(`    {
       "payer_public_address": "FIO6ZJ9p6ZSvboXqaFiowR8bKLtSk8ZGUTHdT8ZkaW6pNnbusPdwa",
       "payee_public_address": "FIO6QtJu52ho38zRP4aZCcgtciLAWQUB3CBgXnmwfFfXi6LvfVYyj",

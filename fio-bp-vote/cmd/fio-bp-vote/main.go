@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/blockpane/fio-tools/voter"
+	voter "github.com/blockpane/fio-tools/fio-bp-vote"
 	"github.com/fioprotocol/fio-go"
 	"io/ioutil"
 	"log"

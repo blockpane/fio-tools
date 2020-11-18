@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/blockpane/fio-tools/fio-domain-airdrop"
+	"github.com/blockpane/fio-tools/misc/fio-domain-airdrop"
 	"github.com/fioprotocol/fio-go"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
