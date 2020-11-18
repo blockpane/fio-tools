@@ -34,7 +34,7 @@ var (
 )
 
 func main() {
-	log.SetFlags(log.LUTC|log.LstdFlags|log.Lshortfile)
+	log.SetFlags(log.LUTC | log.LstdFlags | log.Lshortfile)
 	options()
 	switch true {
 	case nuke:
@@ -72,7 +72,7 @@ func nukeEmAll() (rejected int, err error) {
 
 	retried := 0
 	for {
-		time.Sleep(50*time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		r, _, err = api.GetPendingFioRequests(acc.PubKey, 1000, 0)
 		if len(r.Requests) == 0 {
 			retried += 1
@@ -89,7 +89,7 @@ func nukeEmAll() (rejected int, err error) {
 			}
 			dups[req.FioRequestId] = true
 			// closure to deref
-			func(i uint64){
+			func(i uint64) {
 				_, err = api.SignPushActions(fio.NewRejectFndReq(acc.Actor, strconv.Itoa(int(i))))
 				if err != nil {
 					log.Println(err)
@@ -520,7 +520,7 @@ func options() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if gi.HeadBlockTime.Time.After(time.Now().UTC().Add(30*time.Second)) {
+	if gi.HeadBlockTime.Time.After(time.Now().UTC().Add(30 * time.Second)) {
 		log.Printf("Head block time (%v) is after the default transaction timeout of 30s.", gi.HeadBlockTime.Time)
 		log.Fatal("Is your clock synced?")
 	}
