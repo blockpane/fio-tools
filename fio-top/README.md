@@ -1,9 +1,11 @@
-# fiotop
+# fio-top
 
 *NOTE: this utility is intended for use on a local node, and is intended as a
 development tool. Don't point this at a public endpoint, it generates
 a significant number of requests, and will flood a remote node. Please be
 polite :)*
+
+TODO: convert this to use P2P instead of polling the API for new blocks.
 
 A simple utility for watching the state of a node. Shows some basic net
 info, peer info (if the net_api_plugin is enabled), database size (if

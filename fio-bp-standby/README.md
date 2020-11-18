@@ -1,4 +1,4 @@
-# bp-standby
+# fio-bp-standby
 
 This is a tool that will enable or disable block production on a node. It is intended to activate a standby node quickly,
 if a producer is not signing, and deactivate just as quickly if it detects the primary node is producing blocks again.

@@ -1,4 +1,4 @@
-# feevoter
+# fio-fee-vote
 
 This is a utility for setting FIO fees. It has the following features:
 

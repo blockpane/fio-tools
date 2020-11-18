@@ -1,4 +1,4 @@
-# fio-vote
+# fio-bp-vote
 
 This is an automated voting tool that ranks producers based upon criteria (that can be validated on-chain) in the
 [BP Code of Conduct](https://developers.fioprotocol.io/fio-chain/bp#code-of-conduct). The goal is to reward producers
