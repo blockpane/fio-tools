@@ -24,7 +24,7 @@ Usage of feevoter
   -target string
         optional: target price of regaddress in USDC, alternate: $TARGET env var (default "2.0")
   -url string
-        optional: nodeos api url, alternate: $URL env var
+        required: nodeos api url, alternate: $URL env var
   -wif string
         required: private key, alternate: $WIF env var
   -x    optional: exit after running once (does not apply to AWS Lambda,) use for running from cron
