@@ -2,6 +2,8 @@
 
 Simple utility that derives a WIF from a HD nmemonic phrase, or generates a random HD phrase and prints a WIF.
 
+This utility uses the reserved path in [SLIP44](https://github.com/satoshilabs/slips/blob/master/slip-0044.md) for the FIO chain: `44'/235'/0`
+
 ```
 Usage of fio-hd2wif:
   -f string
