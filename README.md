@@ -19,6 +19,7 @@ Command Line utilities:
  * [fio-req](fio-req/) utility for sending, viewing, rejecting, or responding to FIO requests
  * [fio-top](fio-top/) *nix top-like command for watching transaction activity (inspired by Cryptolions' monitor site)
  * [fio-vanity](fio-vanity/) vanity key generator
+ * [fio-hd2wif](fio-hd2wif/) get WIF from HD phrase
 
 Miscellaneous (not included in binary releases)
 
