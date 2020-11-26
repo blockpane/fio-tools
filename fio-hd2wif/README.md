@@ -1,6 +1,6 @@
 # fio-hd2wif
 
-Simple utility that derives a WIF from a HD nmemonic phrase, or generates a random HD phrase and prints a WIF.
+Simple utility that derives a WIF from a HD mnemonic phrase, or generates a random HD phrase and prints a WIF.
 
 This utility uses the reserved path in [SLIP44](https://github.com/satoshilabs/slips/blob/master/slip-0044.md) for the FIO chain: `44'/235'/0`
 
@@ -12,7 +12,7 @@ Usage of fio-hd2wif:
         optional: which key index to derive, default 0
   -n    Generate a new HD phrase and print the first WIF
   -w int
-        number of words for new nmemonic, valid values are: 12, 15, 18, 21, or 24 (default 24)
+        number of words for new mnemonic, valid values are: 12, 15, 18, 21, or 24 (default 24)
 ```
 
 ### Examples
@@ -36,7 +36,7 @@ Please enter the mnemonic phrase: tree salt elite boss wide blade involve saddle
 
 ```
 
-Read a HD nmemonic from a file and print the first WIF:
+Read a HD mnemonic from a file and print the first WIF:
 ```
 $ fio-hd2wif -f local-phrase.txt
 5JmxdCbDiWSSHEzc9REaKNty78kUn4DU5PH38MWmtYvMY5hw38o
@@ -44,7 +44,7 @@ $ fio-hd2wif -f local-phrase.txt
 
 ```
 
-Generate a random nmemonic and print the first WIF:
+Generate a random mnemonic and print the first WIF:
 ```
 $ fio-hd2wif -n
 decline asset blood nature green else replace witness couple cement please mesh drastic electric appear curious drink differ oven doctor parent input evil enemy
@@ -53,7 +53,7 @@ decline asset blood nature green else replace witness couple cement please mesh 
 
 ```
 
-Generate a random 21 word nmemonic and print the first WIF:
+Generate a random 21 word mnemonic and print the first WIF:
 ```
 $ fio-hd2wif -n -w 21
 tornado suggest broken deal nasty evoke sister rocket middle demand casual school maple whale since enough chaos penalty upon ticket donor

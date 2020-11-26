@@ -17,7 +17,7 @@ func main() {
 	var err error
 
 	flag.BoolVar(&newHd, "n", false, "Generate a new HD phrase and print the first WIF")
-	flag.IntVar(&newHdWords, "w", 24, "number of words for new nmemonic, valid values are: 12, 15, 18, 21, or 24")
+	flag.IntVar(&newHdWords, "w", 24, "number of words for new mnemonic, valid values are: 12, 15, 18, 21, or 24")
 
 	flag.IntVar(&index, "i", 0, "optional: which key index to derive, default 0")
 	flag.StringVar(&inFile, "f", "", "optional: Read HD mnemonic from file")
@@ -37,12 +37,12 @@ func main() {
 		return
 	}
 
-	var nmemonic string
+	var mnemonic string
 	switch inFile {
 	case "":
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Please enter the mnemonic phrase: ")
-		nmemonic, err = reader.ReadString('\n')
+		mnemonic, err = reader.ReadString('\n')
 		if err != nil {
 			panic(err)
 		}
@@ -58,11 +58,11 @@ func main() {
 			panic(err)
 		}
 		_ = f.Close()
-		nmemonic = string(kb)
+		mnemonic = string(kb)
 	}
 
 	rex := regexp.MustCompile(`[^\w ]`)
-	hd, err := fiox.NewHdFromString(rex.ReplaceAllString(nmemonic, ""))
+	hd, err := fiox.NewHdFromString(rex.ReplaceAllString(mnemonic, ""))
 	if err != nil {
 		panic(err)
 	}
