@@ -5,6 +5,8 @@ This is an automated voting tool that ranks producers based upon criteria (that 
 that actively contribute to keeping the chain healthy, therefore actions like participating in proposals for setcode,
 and performing fee maintenance are strongly favored. Sending requests that should be seen frequently are also rewarded.
 
+Current ranks for mainnet can be viewed [here](https://snap.blockpane.com/proxy.html)
+
 It allows setting the number of producers to vote for, how often to recalculate votes, allows using a linked-auth key
 (highly recommended!), and can restrict to only include a list of allowed producers. It will check every minute for
 producers missing (full) rounds, and retracts their votes. It will not vote for them again for three times the
@@ -38,9 +40,9 @@ vote calculation frequency (3 days by default.)
 ## Scoring Criteria:
 
 ```
-participation in msig (propose, approve, exec) + 3 points each, last 30 days
-fee votes (bundlevote, setfeevote, setfeemult) + 2 points each, last 30 days
-maintenance (bpclaim, tpidclaim, burnexpired)  + 1 point each, last 24 hours
+participation in msig (propose, approve, exec)              + 10 points each, last 30 days
+fee votes (bundlevote, setfeevote, setfeemult)              + 1 points each, last 30 days
+maintenance (bpclaim, tpidclaim, burnexpired, computefees)  + 1 point each, last 24 hours
 
 url in producers table is reachable            + 1 point
 url has a bp.json or chain json                + 1 point
@@ -50,6 +52,8 @@ Penalties:
 ----------
 
 average CPU for transactions, last 48 hours    - neg 3 points, per each 1ms over 5ms avg
+have not performed bpclaim in last 30 days     - neg 100 points
+does not have any existing votes               - neg 200 points
 missed round                                   - will not get a vote for next 3 cycles, triggers immediate re-calculation
 ```
 

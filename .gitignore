@@ -2,3 +2,6 @@
 .DS_Store
 local*
 dist/
+ranks.json
+.last-vote
+.voter-missed

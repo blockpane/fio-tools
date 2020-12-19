@@ -67,9 +67,20 @@ func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]s
 
 	// save out a copy of rankings
 	func() {
-		r := make([]*BpRank, len(eligible))
-		for i, bpr := range eligible {
-			r[i] = bps[bpr]
+		r := make([]*BpRank, 0)
+		for _, bpr := range eligible {
+			if bps[bpr].hasNoVotes && !bps[bpr].HasClaimed {
+				continue
+			}
+			r = append(r, bps[bpr])
+		}
+		for k, v := range Missed {
+			if v.After(time.Now().UTC()) {
+				r = append(r, &BpRank{
+					Address:         fio.Address(k),
+					MissingExcluded: true,
+				})
+			}
 		}
 		j, err := json.MarshalIndent(r, "", "  ")
 		if err != nil {
@@ -111,6 +122,7 @@ type BpRank struct {
 	//NetApi       bool `json:"net_api"`
 	//ProdApi      bool `json:"prod_api"`
 	//MissedBlocks int  `json:"missed_blocks"`
+	MissingExcluded bool `json:"missing_excluded"`
 
 	DiffSignKey       bool `json:"diff_sign_key"`
 	BpJson            bool `json:"bp_json"`
@@ -118,6 +130,9 @@ type BpRank struct {
 	RegValidUrl       bool `json:"valid_url"`
 	UsingLinkedOrMsig bool `json:"using_linked_auth_or_msig"`
 	HasClaimed        bool `json:"has_claimed_30d"`
+	hasNoVotes        bool
+	Svg               string `json:"svg"`
+	Time              string `json:"time"`
 }
 
 func (bp *BpRank) score() {
@@ -129,13 +144,27 @@ func (bp *BpRank) score() {
 	if bp.UsingLinkedOrMsig {
 		bp.Score += 3
 	}
-	for _, good := range []bool{bp.BpJson, bp.BpJsonCors, bp.RegValidUrl, bp.HasClaimed} {
+	for _, good := range []bool{bp.BpJson, bp.BpJsonCors, bp.RegValidUrl} {
 		if good {
 			bp.Score += 1
 		}
 	}
+	// gets a boost, but only so much, calling it every few minutes is a waste.
+	feeScore := bp.FeeVote * 2
+	if feeScore > 60 {
+		feeScore = 60
+	}
 	//  extra rewards for msig, and feevoting
-	bp.Score += (3 * bp.Msig) + (2 * bp.FeeVote) + bp.BpClaim + bp.Burn + bp.CpuScore + bp.Compute
+	bp.Score += (10 * bp.Msig) + feeScore + bp.BpClaim + bp.Burn + bp.CpuScore + bp.Compute
+	// looks like no one is home, knock the score way down!
+	if !bp.HasClaimed {
+		bp.Score -= 100
+	}
+	// producers without any votes are even less desirable
+	if bp.hasNoVotes {
+		bp.Score -= 200
+	}
+	bp.Time = time.Now().Format(time.UnixDate)
 }
 
 func (bp *BpRank) getBpJson(api *fio.API) error {
@@ -143,10 +172,11 @@ func (bp *BpRank) getBpJson(api *fio.API) error {
 		return errors.New("cannot search: bp.Account is empty")
 	}
 	bpj, err := api.GetBpJson(bp.Account)
-	if err != nil {
+	if err != nil || bpj == nil {
 		return err
 	}
 	bp.RegValidUrl = true
+	bp.Svg = bpj.Org.Branding.LogoSvg
 	if bpj.Nodes != nil && len(bpj.Nodes) > 0 {
 		bp.BpJson = true
 	}
@@ -167,8 +197,11 @@ func (bp *BpRank) getHistory(api *fio.API) error {
 		return err
 	}
 	bp.bpSignKey = bpc.ProducerPublicKey
-	if bpc.LastClaimTime.After(time.Now().Add(-720 * time.Hour)) {
+	if bpc.LastBpClaim > time.Now().UTC().Add(-720*time.Hour).Unix() {
 		bp.HasClaimed = true
+	}
+	if bpc.TotalVotes == "0.00000000000000000" {
+		bp.hasNoVotes = true
 	}
 	highest, err := api.GetMaxActions(bp.Account)
 	if err != nil {

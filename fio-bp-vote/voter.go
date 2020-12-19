@@ -94,7 +94,6 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 		}
 		fmt.Println("would have voted for:")
 		fmt.Println(string(j))
-		return nil
 	}
 
 	cur := eligible[:votes]
@@ -109,20 +108,22 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 	LastVote = lv
 
 	resp := &eos.PushTransactionFullResp{}
-	for i := 0; i < 10; i++ {
-		resp, err = api.SignPushActions(action)
-		if err == nil {
-			break
+	if !Dry {
+		for i := 0; i < 10; i++ {
+			resp, err = api.SignPushActions(action)
+			if err == nil {
+				break
+			}
+			log.Println(err)
+			time.Sleep(6 * time.Second)
 		}
-		log.Println(err)
-		time.Sleep(6 * time.Second)
+		if V {
+			log.Println("voted for ", eligible[:votes])
+			j, _ := json.Marshal(resp)
+			log.Println(string(j))
+		}
 	}
-	if V {
-		log.Println("voted for ", eligible[:votes])
-		j, _ := json.Marshal(resp)
-		log.Println(string(j))
-	}
-	if resp != nil && err == nil {
+	if Dry || (resp != nil && err == nil) {
 		MissedAfter = time.Now().Add(12 * time.Minute)
 		go func() {
 			last, err := os.OpenFile(".last-vote", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
@@ -320,8 +321,10 @@ func getEligible(api *fio.API) ([]string, error) {
 // only what we need.
 type ProducerCompact struct {
 	FioAddress        string       `json:"fio_address"`
+	TotalVotes        string       `json:"total_votes"`
 	Url               string       `json:"url"`
 	LastClaimTime     eos.JSONTime `json:"last_claim_time"`
+	LastBpClaim       int64        `json:"last_bpclaim"`
 	ProducerPublicKey string       `json:"producer_public_key"`
 }
 
