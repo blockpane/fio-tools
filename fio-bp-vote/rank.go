@@ -50,14 +50,14 @@ func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]s
 	wg.Add(len(bps))
 	for _, b := range bps {
 		// getting bp.json is slow, do it concurrently
-		go func(bp *BpRank) {
+		go func(bp *BpRank, who string) {
 			defer wg.Done()
 			err = bp.getBpJson(api)
 			if err != nil && V {
-				log.Println(err)
+				log.Println(who, err)
 			}
 			bp.score()
-		}(b)
+		}(b, string(b.Address))
 	}
 	wg.Wait()
 
