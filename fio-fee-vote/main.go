@@ -136,6 +136,7 @@ func handler() error {
 
 	if update != nil {
 		log.Println("attempting feevote update")
+		api.RefreshFees()
 		// may help to compress given the size of the request.
 		opt.Compress = fio.CompressionZlib
 		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
@@ -182,6 +183,7 @@ func handler() error {
 				return errors.New("new fee multiplier would be more than a 25% change, please set it manually to continue automatically adjusting fees")
 			}
 
+			api.RefreshFees() // ensure we don't underpay if running as a daemon
 			act := fio.NewActionWithPermission("fio.fee", "setfeemult", actor, string(perm), fio.SetFeeMult{
 				Multiplier: multiplier,
 				Actor:      actor,
