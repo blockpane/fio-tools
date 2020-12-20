@@ -267,7 +267,8 @@ func (bp *BpRank) getHistory(api *fio.API) error {
 				continue
 			}
 			switch act {
-			case "bundlevote", "setfeemult", "setfeevote":
+			// bundlevote should no longer work, but leaving it for now.
+			case "bundlevote", "setfeemult", "setfeevote", "mandatoryfee":
 				bp.FeeVote += 1
 			case "computefees":
 				// limit boost for calling computefees since it's free

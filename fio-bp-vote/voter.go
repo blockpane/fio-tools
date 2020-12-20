@@ -76,6 +76,8 @@ func Vote(cpuRank map[string]int, api *fio.API) error {
 		return err
 	}
 
+	// since this is a long-running daemon, fees may have changed since last run, ensure it's fresh
+	api.RefreshFees()
 	// little bit more work when overriding the permission ... but this is best done via a linkauth
 	action := fio.NewActionWithPermission("eosio", "voteproducer",
 		eos.AccountName(strings.Split(Perm, "@")[0]),
