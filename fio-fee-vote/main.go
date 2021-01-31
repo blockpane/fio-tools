@@ -36,9 +36,9 @@ func main() {
 }
 
 func handler() error {
-	var a, p, wif, nodeos, sTarget, customFees string
+	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
-	var once bool
+	var once, claim bool
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: $ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: $PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: $WIF env var")
@@ -47,6 +47,8 @@ func handler() error {
 	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: $JSON env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
+	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run")
+	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (only when -claim=true)")
 	flag.Parse()
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
@@ -211,6 +213,28 @@ func handler() error {
 		return nil
 	}
 
+	doClaims := func() error {
+		if !claim || myName == "" {
+			return nil
+		}
+		act := fio.NewActionWithPermission("fio.treasury", "bpclaim", actor, string(perm), fio.BpClaim{
+			FioAddress: myName,
+			Actor:      actor,
+		})
+		_, err = api.SignPushActions(act)
+		if err != nil {
+			return err
+		}
+		act = fio.NewActionWithPermission("fio.treasury", "tpidclaim", actor, string(perm), fio.PayTpidRewards{
+			Actor:      actor,
+		})
+		_, err = api.SignPushActions(act)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	err = setMultiplier()
 	// don't loop if running as lambda function
 	if once {
@@ -222,6 +246,10 @@ func handler() error {
 		select {
 		case <-ticker.C:
 			go func() {
+				err = doClaims()
+				if err != nil {
+					log.Println(err)
+				}
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
 				time.Sleep(time.Duration(rand.Intn(300)+1) * time.Second) // #nosec
