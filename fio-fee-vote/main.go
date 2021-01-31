@@ -302,6 +302,7 @@ func handler() error {
 
 func defaultFee() []*fio.FeeValue {
 	defaults := []*fio.FeeValue{
+		{EndPoint: "add_bundled_transactions", Value: 2000000000},
 		{EndPoint: "add_pub_address", Value: 30000000},
 		{EndPoint: "add_to_whitelist", Value: 30000000},
 		{EndPoint: "auth_delete", Value: 20000000},
@@ -334,6 +335,7 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "submit_fee_ratios", Value: 70000000},
 		{EndPoint: "transfer_fio_address", Value: 60000000},
 		{EndPoint: "transfer_fio_domain", Value: 100000000},
+		{EndPoint: "transfer_locked_tokens", Value: 100000000},
 		{EndPoint: "transfer_tokens_pub_key", Value: 100000000},
 		{EndPoint: "unregister_producer", Value: 20000000},
 		{EndPoint: "unregister_proxy", Value: 20000000},
