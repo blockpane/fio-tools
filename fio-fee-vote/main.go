@@ -149,26 +149,34 @@ func handler() error {
 		}
 	}
 
-	if update != nil {
-		log.Println("attempting feevote update")
-		api.RefreshFees()
-		// may help to compress given the size of the request.
-		opt.Compress = fio.CompressionZlib
-		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
+	for {
+		if ok, _ := isProducer(actor, claim, myName, api); !ok {
+			log.Println("not an active producer, or other problems, waiting to set fees until registered")
+			time.Sleep(10 * time.Minute)
+			continue
+		}
+		if update != nil {
+			log.Println("attempting feevote update")
+			api.RefreshFees()
+			// may help to compress given the size of the request.
+			opt.Compress = fio.CompressionZlib
+			_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
 				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFeeByAction("setfeevote")), Actor: actor},
 			).ToEos()}, &opt.TxOptions,
-		)
-		if err != nil {
-			log.Println(err)
-			log.Println("Could not update base fees, has it been an hour? Continuing anyway")
-		} else {
-			log.Println("feevote updated")
+			)
+			if err != nil {
+				log.Println(err)
+				log.Println("Could not update base fees, has it been an hour? Continuing anyway")
+			} else {
+				log.Println("feevote updated")
+			}
 		}
+		break
 	}
 
 	setMultiplier := func() error {
 
-		// maintenance calls all BPs should be calling to trigger fee updates, also adding a burnexpired to cleanup
+		// maint is a few maintenance calls all BPs should be calling to trigger fee updates, also adding a burnexpired to cleanup
 		// addresses that should be removed from state
 		maint := func() {
 			// this can fail without consequence, try to call it several times across multiple blocks.
@@ -178,7 +186,7 @@ func handler() error {
 					log.Println("Compute fees failed (can safely ignore): ", err.Error())
 					break
 				}
-				time.Sleep(501 * time.Millisecond)
+				time.Sleep(time.Second)
 			}
 			// throw in a quick burnexpired for good measure, this won't even be possible until after late March 2021
 			// when addresses start expiring.
