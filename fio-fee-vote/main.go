@@ -43,9 +43,9 @@ func handler() error {
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
 	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: URL env var")
-	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $ARGET env var")
+	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: TARGET env var")
 	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: JSON env var")
-	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
+	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda), alternate FREQ env var")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
 	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
 	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
@@ -57,6 +57,12 @@ func handler() error {
 
 	if !claim && os.Getenv("CLAIM") != "" {
 		claim = true
+	}
+	if frequency == 2 && os.Getenv("FREQ") != "" {
+		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
+		if err != nil && dur != 0 {
+			frequency = int(dur)
+		}
 	}
 
 	switch "" {
@@ -255,7 +261,10 @@ func handler() error {
 		}
 	}
 
-	err = setMultiplier()
+	ok, err := isProducer(actor, claim, myName, api)
+	if ok && err != nil {
+		err = setMultiplier()
+	}
 	// don't loop if running as lambda function
 	if once {
 		return err
@@ -266,6 +275,11 @@ func handler() error {
 		select {
 		case <-ticker.C:
 			go func() {
+				ok, err = isProducer(actor, claim, myName, api)
+				if !ok {
+					log.Println("problems with registration preventing maintenance, sleeping")
+					return
+				}
 				doClaims()
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
@@ -465,4 +479,45 @@ func GetCurMult(actor eos.AccountName, api *fio.API) (float64, error) {
 		return 0, err
 	}
 	return fm, err
+}
+
+type trimmedProd struct {
+	Owner eos.AccountName `json:"owner"`
+	FioAddress string `json:"fio_address"`
+	IsActive uint8 `json:"is_active"`
+}
+
+func isProducer(actor eos.AccountName, claim bool, fioName string, api *fio.API) (bool, error) {
+	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
+		Code:       "eosio",
+		Scope:      "eosio",
+		Table:      "producers",
+		LowerBound: string(actor),
+		UpperBound: string(actor),
+		Limit:      1,
+		KeyType:    "name",
+		Index:      "4",
+		JSON:       true,
+	})
+	if err != nil {
+		return false, err
+	}
+	current := make([]trimmedProd, 0)
+	err = json.Unmarshal(gtr.Rows, &current)
+	if len(current) == 0 {
+		log.Println("not registered as an active producer")
+		return false, nil
+	}
+	switch true {
+	case current[0].Owner != actor:
+		log.Println("got a bad match on account name")
+		return false, err
+	case current[0].IsActive == 0:
+		log.Println("producer is not active")
+		return false, err
+	case claim && current[0].FioAddress != fioName:
+		log.Println("FIO name does not match for producer")
+		return false, err
+	}
+	return true, nil
 }
