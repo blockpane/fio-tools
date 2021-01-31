@@ -161,6 +161,29 @@ func handler() error {
 	}
 
 	setMultiplier := func() error {
+
+		// maintenance calls all BPs should be calling to trigger fee updates, also adding a burnexpired to cleanup
+		// addresses that should be removed from state
+		maint := func() {
+			// this can fail without consequence, try to call it several times across multiple blocks.
+			for i := 0; i < 3; i++ {
+				_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
+				if err != nil {
+					log.Println("Compute fees failed (can safely ignore): ", err.Error())
+					break
+				}
+				time.Sleep(501 * time.Millisecond)
+			}
+			// throw in a quick burnexpired for good measure, this won't even be possible until after late March 2021
+			// when addresses start expiring.
+			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpired{}))
+			if err != nil {
+				log.Println("Burn expired failed (can safely ignore): ", err.Error())
+			}
+		}
+		// call the maintenance calls on the way out everytime, even if we didn't set fees/multiplier.
+		defer maint()
+
 		prices, err := getGecko()
 		if err != nil {
 			return err
@@ -208,15 +231,6 @@ func handler() error {
 			return nil
 		}
 
-		// this can fail without consequence, try to call it several times across multiple blocks.
-		for i := 0; i < 3; i++ {
-			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
-			if err != nil {
-				log.Println("Compute fees failed (can safely ignore): ", err.Error())
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
 		return nil
 	}
 
