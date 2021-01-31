@@ -39,20 +39,24 @@ func handler() error {
 	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
 	var once, claim bool
-	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: $ACTOR env var")
-	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: $PERM env var")
-	flag.StringVar(&wif, "wif", "", "required: private key, alternate: $WIF env var")
-	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: $URL env var")
-	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $TARGET env var")
-	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: $JSON env var")
+	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: ACTOR env var")
+	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
+	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
+	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: URL env var")
+	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $ARGET env var")
+	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: JSON env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
-	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run")
-	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (only when -claim=true)")
+	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
+	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
 	flag.Parse()
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		once = true
+	}
+
+	if !claim && os.Getenv("CLAIM") != "" {
+		claim = true
 	}
 
 	switch "" {
@@ -70,6 +74,9 @@ func handler() error {
 		fallthrough
 	case sTarget:
 		sTarget = os.Getenv("TARGET")
+		fallthrough
+	case myName:
+		myName = os.Getenv("NAME")
 		fallthrough
 	case customFees:
 		customFees = os.Getenv("JSON")
@@ -213,9 +220,9 @@ func handler() error {
 		return nil
 	}
 
-	doClaims := func() error {
+	doClaims := func() {
 		if !claim || myName == "" {
-			return nil
+			return
 		}
 		act := fio.NewActionWithPermission("fio.treasury", "bpclaim", actor, string(perm), fio.BpClaim{
 			FioAddress: myName,
@@ -223,16 +230,15 @@ func handler() error {
 		})
 		_, err = api.SignPushActions(act)
 		if err != nil {
-			return err
+			log.Println(err)
 		}
 		act = fio.NewActionWithPermission("fio.treasury", "tpidclaim", actor, string(perm), fio.PayTpidRewards{
 			Actor:      actor,
 		})
 		_, err = api.SignPushActions(act)
 		if err != nil {
-			return err
+			log.Println(err)
 		}
-		return nil
 	}
 
 	err = setMultiplier()
@@ -246,10 +252,7 @@ func handler() error {
 		select {
 		case <-ticker.C:
 			go func() {
-				err = doClaims()
-				if err != nil {
-					log.Println(err)
-				}
+				doClaims()
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
 				time.Sleep(time.Duration(rand.Intn(300)+1) * time.Second) // #nosec
