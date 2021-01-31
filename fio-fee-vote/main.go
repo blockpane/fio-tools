@@ -36,21 +36,33 @@ func main() {
 }
 
 func handler() error {
-	var a, p, wif, nodeos, sTarget, customFees string
+	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
-	var once bool
-	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: $ACTOR env var")
-	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: $PERM env var")
-	flag.StringVar(&wif, "wif", "", "required: private key, alternate: $WIF env var")
-	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: $URL env var")
-	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: $TARGET env var")
-	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: $JSON env var")
-	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda)")
+	var once, claim bool
+	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: ACTOR env var")
+	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
+	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
+	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: URL env var")
+	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: TARGET env var")
+	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: JSON env var")
+	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda), alternate FREQ env var")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
+	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
+	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
 	flag.Parse()
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		once = true
+	}
+
+	if !claim && os.Getenv("CLAIM") != "" {
+		claim = true
+	}
+	if frequency == 2 && os.Getenv("FREQ") != "" {
+		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
+		if err != nil && dur != 0 {
+			frequency = int(dur)
+		}
 	}
 
 	switch "" {
@@ -68,6 +80,9 @@ func handler() error {
 		fallthrough
 	case sTarget:
 		sTarget = os.Getenv("TARGET")
+		fallthrough
+	case myName:
+		myName = os.Getenv("NAME")
 		fallthrough
 	case customFees:
 		customFees = os.Getenv("JSON")
@@ -134,24 +149,55 @@ func handler() error {
 		}
 	}
 
-	if update != nil {
-		log.Println("attempting feevote update")
-		api.RefreshFees()
-		// may help to compress given the size of the request.
-		opt.Compress = fio.CompressionZlib
-		_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
+	for {
+		if ok, _ := isProducer(actor, claim, myName, api); !ok {
+			log.Println("not an active producer, or other problems, waiting to set fees until registered")
+			time.Sleep(10 * time.Minute)
+			continue
+		}
+		if update != nil {
+			log.Println("attempting feevote update")
+			api.RefreshFees()
+			// may help to compress given the size of the request.
+			opt.Compress = fio.CompressionZlib
+			_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
 				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFeeByAction("setfeevote")), Actor: actor},
 			).ToEos()}, &opt.TxOptions,
-		)
-		if err != nil {
-			log.Println(err)
-			log.Println("Could not update base fees, has it been an hour? Continuing anyway")
-		} else {
-			log.Println("feevote updated")
+			)
+			if err != nil {
+				log.Println(err)
+				log.Println("Could not update base fees, has it been an hour? Continuing anyway")
+			} else {
+				log.Println("feevote updated")
+			}
 		}
+		break
 	}
 
 	setMultiplier := func() error {
+
+		// maint is a few maintenance calls all BPs should be calling to trigger fee updates, also adding a burnexpired to cleanup
+		// addresses that should be removed from state
+		maint := func() {
+			// this can fail without consequence, try to call it several times across multiple blocks.
+			for i := 0; i < 3; i++ {
+				_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
+				if err != nil {
+					log.Println("Compute fees failed (can safely ignore): ", err.Error())
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			// throw in a quick burnexpired for good measure, this won't even be possible until after late March 2021
+			// when addresses start expiring.
+			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpired{}))
+			if err != nil {
+				log.Println("Burn expired failed (can safely ignore): ", err.Error())
+			}
+		}
+		// call the maintenance calls on the way out everytime, even if we didn't set fees/multiplier.
+		defer maint()
+
 		prices, err := getGecko()
 		if err != nil {
 			return err
@@ -199,19 +245,34 @@ func handler() error {
 			return nil
 		}
 
-		// this can fail without consequence, try to call it several times across multiple blocks.
-		for i := 0; i < 3; i++ {
-			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
-			if err != nil {
-				log.Println("Compute fees failed (can safely ignore): ", err.Error())
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
 		return nil
 	}
 
-	err = setMultiplier()
+	doClaims := func() {
+		if !claim || myName == "" {
+			return
+		}
+		act := fio.NewActionWithPermission("fio.treasury", "bpclaim", actor, string(perm), fio.BpClaim{
+			FioAddress: myName,
+			Actor:      actor,
+		})
+		_, err = api.SignPushActions(act)
+		if err != nil {
+			log.Println(err)
+		}
+		act = fio.NewActionWithPermission("fio.treasury", "tpidclaim", actor, string(perm), fio.PayTpidRewards{
+			Actor:      actor,
+		})
+		_, err = api.SignPushActions(act)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	ok, err := isProducer(actor, claim, myName, api)
+	if ok && err != nil {
+		err = setMultiplier()
+	}
 	// don't loop if running as lambda function
 	if once {
 		return err
@@ -222,6 +283,12 @@ func handler() error {
 		select {
 		case <-ticker.C:
 			go func() {
+				ok, err = isProducer(actor, claim, myName, api)
+				if !ok {
+					log.Println("problems with registration preventing maintenance, sleeping")
+					return
+				}
+				doClaims()
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
 				time.Sleep(time.Duration(rand.Intn(300)+1) * time.Second) // #nosec
@@ -420,4 +487,45 @@ func GetCurMult(actor eos.AccountName, api *fio.API) (float64, error) {
 		return 0, err
 	}
 	return fm, err
+}
+
+type trimmedProd struct {
+	Owner eos.AccountName `json:"owner"`
+	FioAddress string `json:"fio_address"`
+	IsActive uint8 `json:"is_active"`
+}
+
+func isProducer(actor eos.AccountName, claim bool, fioName string, api *fio.API) (bool, error) {
+	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
+		Code:       "eosio",
+		Scope:      "eosio",
+		Table:      "producers",
+		LowerBound: string(actor),
+		UpperBound: string(actor),
+		Limit:      1,
+		KeyType:    "name",
+		Index:      "4",
+		JSON:       true,
+	})
+	if err != nil {
+		return false, err
+	}
+	current := make([]trimmedProd, 0)
+	err = json.Unmarshal(gtr.Rows, &current)
+	if len(current) == 0 {
+		log.Println("not registered as an active producer")
+		return false, nil
+	}
+	switch true {
+	case current[0].Owner != actor:
+		log.Println("got a bad match on account name")
+		return false, err
+	case current[0].IsActive == 0:
+		log.Println("producer is not active")
+		return false, err
+	case claim && current[0].FioAddress != fioName:
+		log.Println("FIO name does not match for producer")
+		return false, err
+	}
+	return true, nil
 }
