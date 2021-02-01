@@ -60,7 +60,7 @@ func handler() error {
 	}
 	if os.Getenv("FREQ") != "" {
 		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
-		if err != nil && dur > 0 {
+		if err == nil && dur > 0 {
 			log.Println("set frequency via ENV to:", frequency)
 			frequency = int(dur)
 		}
