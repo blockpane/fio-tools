@@ -58,9 +58,10 @@ func handler() error {
 	if !claim && os.Getenv("CLAIM") != "" {
 		claim = true
 	}
-	if frequency == 2 && os.Getenv("FREQ") != "" {
+	if os.Getenv("FREQ") != "" {
 		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
-		if err != nil && dur != 0 {
+		if err != nil && dur > 0 {
+			log.Println("set frequency via ENV to:", frequency)
 			frequency = int(dur)
 		}
 	}
@@ -271,6 +272,7 @@ func handler() error {
 
 	ok, err := isProducer(actor, claim, myName, api)
 	if ok && err != nil {
+		doClaims()
 		err = setMultiplier()
 	}
 	// don't loop if running as lambda function
@@ -291,7 +293,7 @@ func handler() error {
 				doClaims()
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
-				time.Sleep(time.Duration(rand.Intn(300)+1) * time.Second) // #nosec
+				time.Sleep(time.Duration(rand.Intn(10)) * time.Minute) // #nosec
 				if err = setMultiplier(); err != nil {
 					log.Println(err)
 				}
