@@ -66,8 +66,8 @@ func handler() error {
 	if os.Getenv("FREQ") != "" {
 		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
 		if err == nil && dur > 0 {
-			log.Println("set frequency via ENV to:", frequency)
 			frequency = int(dur)
+			log.Println("set frequency via ENV to:", frequency)
 		}
 	}
 
@@ -167,7 +167,7 @@ func handler() error {
 			time.Sleep(10 * time.Minute)
 			continue
 		}
-		if update != nil {
+		if update != nil && !skip {
 			log.Println("attempting feevote update")
 			api.RefreshFees()
 			// may help to compress given the size of the request.
