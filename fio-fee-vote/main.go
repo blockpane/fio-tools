@@ -38,7 +38,7 @@ func main() {
 func handler() error {
 	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
-	var once, claim bool
+	var once, claim, skip bool
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
@@ -48,6 +48,7 @@ func handler() error {
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda), alternate FREQ env var")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
 	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
+	flag.BoolVar(&skip, "skip", false, "optional: skip feevote (only do feemult votes) alternate: SKIP env var")
 	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
 	flag.Parse()
 
@@ -58,6 +59,10 @@ func handler() error {
 	if !claim && os.Getenv("CLAIM") != "" {
 		claim = true
 	}
+	if !skip && os.Getenv("SKIP") != "" {
+		skip = true
+	}
+
 	if os.Getenv("FREQ") != "" {
 		dur, err := strconv.ParseInt(os.Getenv("FREQ"), 10, 32)
 		if err == nil && dur > 0 {
@@ -123,11 +128,17 @@ func handler() error {
 	update := make([]*fio.FeeValue, 0)
 	switch "" {
 	case customFees:
+		if skip {
+			break
+		}
 		update, err = needsBaseFees(nil, actor, api)
 		if err != nil && once {
 			return err
 		}
 	default:
+		if skip {
+			break
+		}
 		custom := make([]*fio.FeeValue, 0)
 		f, err := os.OpenFile(customFees, os.O_RDONLY, 0644)
 		if err != nil {
