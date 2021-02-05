@@ -2,15 +2,11 @@ package bulk
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +89,7 @@ func RejectRequests() (rejected int, err error) {
 		var id int
 		id, e = strconv.Atoi(strings.TrimSpace(string(l)))
 		if e != nil {
+			log.Println("could not parse line:", l)
 			continue
 		}
 		pending, e := IsPending(id)
