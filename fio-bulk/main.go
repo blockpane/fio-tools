@@ -21,35 +21,43 @@ import (
 const csvHeader = `"request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"` + "\n"
 
 var (
-	inFile  string
-	outFile string
+	InFile  string
+	OutFile string
 
-	acc *fio.Account
-	api *fio.API
+	Acc *fio.Account
+	Api *fio.API
+	F   *os.File
 
-	f       *os.File
-	query   bool
-	verbose bool
-	nuke    bool
+	Quiet   bool
+	Confirm bool
+	Nuke    bool
+	Verbose bool
+	Query   bool
+	SendFio float32
+)
+
+const (
+	bundleReject = 1
+	bundleRespond = 2
 )
 
 func main() {
 	log.SetFlags(log.LUTC | log.LstdFlags | log.Lshortfile)
 	options()
 	switch true {
-	case nuke:
+	case Nuke:
 		deleted, err := nukeEmAll()
 		if err != nil {
 			log.Fatal(err)
 		}
 		log.Printf("Rejected %d requests\n", deleted)
-		if r, _, _ := api.GetPendingFioRequests(acc.PubKey, 1000, 0); len(r.Requests) > 0 {
+		if r, _, _ := Api.GetPendingFioRequests(Acc.PubKey, 1000, 0); len(r.Requests) > 0 {
 			log.Fatal("there are still pending requests, please try again.")
 		}
 		os.Exit(0)
-	case query:
+	case Query:
 		ok, wrote, err := dumpRequests()
-		log.Printf("wrote %d records to %s\n", wrote, outFile)
+		log.Printf("wrote %d records to %s\n", wrote, OutFile)
 		if !ok {
 			log.Println("WARNING: could not retrieve all records, the table row query may have timed out.")
 		}
@@ -57,9 +65,11 @@ func main() {
 			log.Fatal(err)
 		}
 		os.Exit(0)
+	case Confirm:
+		// handle positive responses here.
 	}
 	rejected, err := rejectRequests()
-	log.Printf("rejected %d requests from %s\n", rejected, inFile)
+	log.Printf("rejected %d requests from %s\n", rejected, InFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,7 +83,7 @@ func nukeEmAll() (rejected int, err error) {
 	retried := 0
 	for {
 		time.Sleep(50 * time.Millisecond)
-		r, _, err = api.GetPendingFioRequests(acc.PubKey, 1000, 0)
+		r, _, err = Api.GetPendingFioRequests(Acc.PubKey, 1000, 0)
 		if len(r.Requests) == 0 {
 			retried += 1
 			// something's not right with the api responses, retry a few times. Sometimes getting an empty result
@@ -90,7 +100,7 @@ func nukeEmAll() (rejected int, err error) {
 			dups[req.FioRequestId] = true
 			// closure to deref
 			func(i uint64) {
-				_, err = api.SignPushActions(fio.NewRejectFndReq(acc.Actor, strconv.Itoa(int(i))))
+				_, err = Api.SignPushActions(fio.NewRejectFndReq(Acc.Actor, strconv.Itoa(int(i))))
 				if err != nil {
 					log.Println(err)
 				} else {
@@ -104,8 +114,8 @@ func nukeEmAll() (rejected int, err error) {
 
 func rejectRequests() (rejected int, err error) {
 	requests := make([]string, 0)
-	reader := bufio.NewReader(f)
-	defer f.Close()
+	reader := bufio.NewReader(F)
+	defer F.Close()
 	var e error
 	var l []byte
 	for {
@@ -132,12 +142,12 @@ func rejectRequests() (rejected int, err error) {
 			log.Println("have already responded to id", id, "skipping")
 		}
 	}
-	if verbose {
+	if Verbose {
 		fmt.Println(requests)
 	}
 	for _, id := range requests {
 		resp := &eos.PushTransactionFullResp{}
-		resp, err = api.SignPushActions(fio.NewRejectFndReq(acc.Actor, id))
+		resp, err = Api.SignPushActions(fio.NewRejectFndReq(Acc.Actor, id))
 		if err != nil {
 			return
 		}
@@ -154,7 +164,7 @@ type tinyResult struct {
 // isPending looks at the fioreqstss and determines if a response has already been sent for the request.
 func isPending(id int) (bool, error) {
 	i := strconv.Itoa(id)
-	gtr, err := api.GetTableRows(eos.GetTableRowsRequest{
+	gtr, err := Api.GetTableRows(eos.GetTableRowsRequest{
 		Code:       "fio.reqobt",
 		Scope:      "fio.reqobt",
 		Table:      "fioreqstss",
@@ -183,7 +193,7 @@ func isPending(id int) (bool, error) {
 // getAddrHashes returns a slice of i128 hashes for all the FIO addresses owned by the account,  which is a partial sha1 sum.
 // in order to get all requests using a table lookup, it's necessary to know the address hash so we can query by a secondary key.
 func getAddrHashes() ([]string, error) {
-	n, _, err := acc.GetNames(api)
+	n, _, err := Acc.GetNames(Api)
 	if err != nil {
 		return nil, err
 	}
@@ -191,8 +201,8 @@ func getAddrHashes() ([]string, error) {
 		return nil, errors.New("did not find any FIO addresses for that key")
 	}
 	hashes := make([]string, n)
-	for i := range acc.Addresses {
-		hashes[i] = fio.DomainNameHash(acc.Addresses[i].FioAddress)
+	for i := range Acc.Addresses {
+		hashes[i] = fio.DomainNameHash(Acc.Addresses[i].FioAddress)
 	}
 	return hashes, nil
 }
@@ -223,7 +233,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	}()
 
 	// first find the upper bound
-	upperGtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+	upperGtr, err := Api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:       "fio.reqobt",
 		Scope:      "fio.reqobt",
 		Table:      "fioreqctxts",
@@ -247,12 +257,12 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 		return true, make([]int, 0), nil
 	}
 	u := upper[0].FioRequestId
-	if verbose {
+	if Verbose {
 		log.Printf("highest record is %d for index %s\n", upper[0].FioRequestId, h)
 	}
 
 	// now the lower
-	lowerGtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+	lowerGtr, err := Api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:       "fio.reqobt",
 		Scope:      "fio.reqobt",
 		Table:      "fioreqctxts",
@@ -272,7 +282,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	if err != nil {
 		return
 	}
-	if verbose {
+	if Verbose {
 		log.Printf("lowest record is %d for index %s\n", lower[0].FioRequestId, h)
 	}
 	if lower[0].FioRequestId == upper[0].FioRequestId {
@@ -283,11 +293,11 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	// but this is a complete guess, the request id is global not specific to the address,
 	// to be safe this assumes worst-case and that all the requests belong to the same address
 	if upper[0].FioRequestId-lower[0].FioRequestId <= 500 {
-		if verbose {
+		if Verbose {
 			log.Println("attempting one-shot query, less than 500 spread between IDs")
 		}
 		oneShot := &eos.GetTableRowsResp{}
-		oneShot, err = api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+		oneShot, err = Api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 			Code:       "fio.reqobt",
 			Scope:      "fio.reqobt",
 			Table:      "fioreqctxts",
@@ -310,7 +320,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 		// everything there?
 		if once != nil && once[0].FioRequestId == lower[0].FioRequestId && once[len(once)-1].FioRequestId == u {
 			complete = true
-			if verbose {
+			if Verbose {
 				log.Println("got a complete result for ", h)
 			}
 		}
@@ -327,7 +337,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	// as the request table grows.
 	split := (uint32(upper[0].FioRequestId-lower[0].FioRequestId) / 2) + 3
 	unique := make(map[uint64]bool)
-	lowerGtr, err = api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+	lowerGtr, err = Api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:       "fio.reqobt",
 		Scope:      "fio.reqobt",
 		Table:      "fioreqctxts",
@@ -347,7 +357,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	if err != nil {
 		return
 	}
-	if verbose {
+	if Verbose {
 		log.Printf("highest record is %d for ascending search %s\n", lower[len(lower)-1].FioRequestId, h)
 	}
 	ids = make([]int, len(lower))
@@ -360,7 +370,7 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 		return
 	}
 
-	upperGtr, err = api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+	upperGtr, err = Api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:       "fio.reqobt",
 		Scope:      "fio.reqobt",
 		Table:      "fioreqctxts",
@@ -425,8 +435,8 @@ func dumpRequests() (ok bool, wrote int, err error) {
 
 	buf := bytes.NewBuffer(nil)
 	defer func() {
-		_, err = f.Write(buf.Bytes())
-		_ = f.Close()
+		_, err = F.Write(buf.Bytes())
+		_ = F.Close()
 	}()
 	_, _ = buf.WriteString(csvHeader)
 	log.Printf("found %d pending requests, decrypting...", len(ids))
@@ -434,14 +444,14 @@ func dumpRequests() (ok bool, wrote int, err error) {
 		if len(ids) > 100 && count%100 == 0 {
 			fmt.Print(count, "... ")
 		}
-		r, err := api.GetFioRequest(uint64(req))
+		r, err := Api.GetFioRequest(uint64(req))
 		if err != nil {
 			log.Printf("getting request %d failed. %v\n", req, err)
 			continue
 		}
-		content, err := fio.DecryptContent(acc, r.PayeeKey, r.Content, fio.ObtRequestType)
+		content, err := fio.DecryptContent(Acc, r.PayeeKey, r.Content, fio.ObtRequestType)
 		if err != nil {
-			if verbose {
+			if Verbose {
 				log.Printf("decrypting request %d failed. %v - continuing anyway\n", r.FioRequestId, err)
 			}
 			// ensure not nil, we still want to print what we found.
@@ -463,7 +473,7 @@ func dumpRequests() (ok bool, wrote int, err error) {
 			content.Request.Hash,
 			content.Request.OfflineUrl,
 		)
-		if verbose {
+		if Verbose {
 			fmt.Print(s)
 		}
 		_, _ = buf.WriteString(s)
@@ -476,24 +486,27 @@ func dumpRequests() (ok bool, wrote int, err error) {
 }
 
 func options() {
-	var nodeos, privKey string
+	var nodeos, privKey, memo string
 	var unknown bool
 
 	flag.StringVar(&privKey, "k", "", "private key in WIF format, if absent will prompt")
-	flag.StringVar(&inFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
-	flag.StringVar(&outFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
+	flag.StringVar(&InFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
+	flag.StringVar(&OutFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
 	flag.StringVar(&nodeos, "u", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
-	flag.BoolVar(&nuke, "nuke", false, "don't print, don't check, nuke all pending requests. Incompatible with -in -out")
+	flag.StringVar(&memo, "memo", "", "memo to send with responses, does not apply to bulk-reject or nuke only with 'confirm'")
+	flag.BoolVar(&Confirm, "confirm", false, "true sends a 'recordobt' response, false sends a 'rejectfndreq' only applies with '-in' option")
+	flag.BoolVar(&Nuke, "nuke", false, "don't print, don't check, nuke all pending requests. Incompatible with -in -out")
 	flag.BoolVar(&unknown, "unknown", false, "allow connecting to unknown chain id")
+	flag.BoolVar(&Quiet, "y", false, "assume 'yes' to all questions")
 	flag.Parse()
 
 	switch true {
-	case inFile == "" && outFile == "" && !nuke:
+	case InFile == "" && OutFile == "" && !Nuke:
 		log.Fatal("either '-in' (file with request IDs to reject, one integer per line) or '-out' (location for .csv report) is required. Use '-h' to list command options")
-	case inFile != "" && outFile != "":
+	case InFile != "" && OutFile != "":
 		log.Fatal("only one operation is supported, either '-in' or '-out'. Use '-h' to list command options")
-	case outFile != "":
-		query = true
+	case OutFile != "":
+		Query = true
 	}
 
 	_, err := url.Parse(nodeos)
@@ -511,12 +524,12 @@ func options() {
 		privKey = string(b)
 	}
 
-	acc, api, _, err = fio.NewWifConnect(privKey, nodeos)
+	Acc, Api, _, err = fio.NewWifConnect(privKey, nodeos)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	gi, err := api.GetInfo()
+	gi, err := Api.GetInfo()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -536,19 +549,19 @@ func options() {
 	}
 
 	if os.Getenv("DEBUG") != "" {
-		verbose = true
+		Verbose = true
 	}
 
-	if query {
-		f, err = os.OpenFile(outFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if Query {
+		F, err = os.OpenFile(OutFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
 
-	if inFile != "" {
-		f, err = os.OpenFile(inFile, os.O_RDONLY, 0644)
+	if InFile != "" {
+		F, err = os.OpenFile(InFile, os.O_RDONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
