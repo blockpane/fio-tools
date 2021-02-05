@@ -143,9 +143,8 @@ func buildDiscordMessage(msg string) *DiscordMessage {
 	fmt.Print(msg)
 	return &DiscordMessage{
 		Username: "Pizza Pizza!",
-		Content:  "",
+		Content:  "the BUIDLrs need fuel!",
 		Embeds: []DiscordEmbed{{
-			Title:       "the BUIDLrs need fuel!",
 			Description: msg,
 		}},
 	}
