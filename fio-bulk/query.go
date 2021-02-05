@@ -1,168 +1,19 @@
-package main
+package bulk
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"log"
-	"net/url"
-	"os"
 	"sort"
 	"strconv"
-	"strings"
-	"time"
 )
 
-const csvHeader = `"request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"` + "\n"
-
-var (
-	InFile  string
-	OutFile string
-
-	Acc *fio.Account
-	Api *fio.API
-	F   *os.File
-
-	Quiet   bool
-	Confirm bool
-	Nuke    bool
-	Verbose bool
-	Query   bool
-	SendFio float32
-)
-
-const (
-	bundleReject = 1
-	bundleRespond = 2
-)
-
-func main() {
-	log.SetFlags(log.LUTC | log.LstdFlags | log.Lshortfile)
-	options()
-	switch true {
-	case Nuke:
-		deleted, err := nukeEmAll()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("Rejected %d requests\n", deleted)
-		if r, _, _ := Api.GetPendingFioRequests(Acc.PubKey, 1000, 0); len(r.Requests) > 0 {
-			log.Fatal("there are still pending requests, please try again.")
-		}
-		os.Exit(0)
-	case Query:
-		ok, wrote, err := dumpRequests()
-		log.Printf("wrote %d records to %s\n", wrote, OutFile)
-		if !ok {
-			log.Println("WARNING: could not retrieve all records, the table row query may have timed out.")
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	case Confirm:
-		// handle positive responses here.
-	}
-	rejected, err := rejectRequests()
-	log.Printf("rejected %d requests from %s\n", rejected, InFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func nukeEmAll() (rejected int, err error) {
-	var r fio.PendingFioRequestsResponse
-	// rejecting again before committed? Maybe, this moves pretty quick. skip dups....
-	dups := make(map[uint64]bool)
-
-	retried := 0
-	for {
-		time.Sleep(50 * time.Millisecond)
-		r, _, err = Api.GetPendingFioRequests(Acc.PubKey, 1000, 0)
-		if len(r.Requests) == 0 {
-			retried += 1
-			// something's not right with the api responses, retry a few times. Sometimes getting an empty result
-			// where there are pending requests!
-			if retried > 3 {
-				return
-			}
-			continue
-		}
-		for _, req := range r.Requests {
-			if dups[req.FioRequestId] {
-				continue
-			}
-			dups[req.FioRequestId] = true
-			// closure to deref
-			func(i uint64) {
-				_, err = Api.SignPushActions(fio.NewRejectFndReq(Acc.Actor, strconv.Itoa(int(i))))
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Println("rejected request:", i)
-					rejected += 1
-				}
-			}(req.FioRequestId)
-		}
-	}
-}
-
-func rejectRequests() (rejected int, err error) {
-	requests := make([]string, 0)
-	reader := bufio.NewReader(F)
-	defer F.Close()
-	var e error
-	var l []byte
-	for {
-		l, _, e = reader.ReadLine()
-		if e != nil {
-			if e.Error() == "EOF" {
-				break
-			}
-			return rejected, e
-		}
-		var id int
-		id, e = strconv.Atoi(strings.TrimSpace(string(l)))
-		if e != nil {
-			continue
-		}
-		pending, e := isPending(id)
-		if e != nil {
-			log.Println(err)
-			continue
-		}
-		if pending {
-			requests = append(requests, strconv.Itoa(id))
-		} else {
-			log.Println("have already responded to id", id, "skipping")
-		}
-	}
-	if Verbose {
-		fmt.Println(requests)
-	}
-	for _, id := range requests {
-		resp := &eos.PushTransactionFullResp{}
-		resp, err = Api.SignPushActions(fio.NewRejectFndReq(Acc.Actor, id))
-		if err != nil {
-			return
-		}
-		log.Printf("rejected %s with txid %s\n", id, resp.TransactionID)
-		rejected += 1
-	}
-	return
-}
-
-type tinyResult struct {
-	Id int `json:"id"`
-}
-
-// isPending looks at the fioreqstss and determines if a response has already been sent for the request.
-func isPending(id int) (bool, error) {
+// IsPending looks at the fioreqstss and determines if a response has already been sent for the request.
+func IsPending(id int) (bool, error) {
 	i := strconv.Itoa(id)
 	gtr, err := Api.GetTableRows(eos.GetTableRowsRequest{
 		Code:       "fio.reqobt",
@@ -190,9 +41,9 @@ func isPending(id int) (bool, error) {
 	return true, nil
 }
 
-// getAddrHashes returns a slice of i128 hashes for all the FIO addresses owned by the account,  which is a partial sha1 sum.
+// GetAddrHashes returns a slice of i128 hashes for all the FIO addresses owned by the account,  which is a partial sha1 sum.
 // in order to get all requests using a table lookup, it's necessary to know the address hash so we can query by a secondary key.
-func getAddrHashes() ([]string, error) {
+func GetAddrHashes() ([]string, error) {
 	n, _, err := Acc.GetNames(Api)
 	if err != nil {
 		return nil, err
@@ -212,16 +63,16 @@ type onlyRequestId struct {
 	FioRequestId uint64 `json:"fio_request_id"`
 }
 
-// requestsFromTable uses a table query to (attempt to) bypass the limitation of the API endpoint where it will timeout when
+// RequestsFromTable uses a table query to (attempt to) bypass the limitation of the API endpoint where it will timeout when
 // there are thousands of pending requests, it expects an i128 hash, and returns a slice of int64 representing the
 // pending request IDs
-func requestsFromTable(h string) (complete bool, ids []int, err error) {
+func RequestsFromTable(h string) (complete bool, ids []int, err error) {
 
 	// before return, check that if the requests have a response and truncate to only the pending.
 	defer func() {
 		pendingIds := make([]int, 0)
 		for _, pid := range ids {
-			p, e := isPending(pid)
+			p, e := IsPending(pid)
 			if e != nil {
 				log.Println(e)
 			}
@@ -405,10 +256,10 @@ func requestsFromTable(h string) (complete bool, ids []int, err error) {
 	return
 }
 
-func dumpRequests() (ok bool, wrote int, err error) {
+func DumpRequests() (ok bool, wrote int, err error) {
 	ok = true
 	var hashes []string
-	hashes, err = getAddrHashes()
+	hashes, err = GetAddrHashes()
 	if err != nil || len(hashes) == 0 {
 		return
 	}
@@ -417,7 +268,7 @@ func dumpRequests() (ok bool, wrote int, err error) {
 	for _, h := range hashes {
 		var mmmk bool
 		var reqs []int
-		mmmk, reqs, err = requestsFromTable(h)
+		mmmk, reqs, err = RequestsFromTable(h)
 		if err != nil {
 			return
 		}
@@ -485,85 +336,3 @@ func dumpRequests() (ok bool, wrote int, err error) {
 	return ok, wrote, err
 }
 
-func options() {
-	var nodeos, privKey, memo string
-	var unknown bool
-
-	flag.StringVar(&privKey, "k", "", "private key in WIF format, if absent will prompt")
-	flag.StringVar(&InFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
-	flag.StringVar(&OutFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
-	flag.StringVar(&nodeos, "u", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
-	flag.StringVar(&memo, "memo", "", "memo to send with responses, does not apply to bulk-reject or nuke only with 'confirm'")
-	flag.BoolVar(&Confirm, "confirm", false, "true sends a 'recordobt' response, false sends a 'rejectfndreq' only applies with '-in' option")
-	flag.BoolVar(&Nuke, "nuke", false, "don't print, don't check, nuke all pending requests. Incompatible with -in -out")
-	flag.BoolVar(&unknown, "unknown", false, "allow connecting to unknown chain id")
-	flag.BoolVar(&Quiet, "y", false, "assume 'yes' to all questions")
-	flag.Parse()
-
-	switch true {
-	case InFile == "" && OutFile == "" && !Nuke:
-		log.Fatal("either '-in' (file with request IDs to reject, one integer per line) or '-out' (location for .csv report) is required. Use '-h' to list command options")
-	case InFile != "" && OutFile != "":
-		log.Fatal("only one operation is supported, either '-in' or '-out'. Use '-h' to list command options")
-	case OutFile != "":
-		Query = true
-	}
-
-	_, err := url.Parse(nodeos)
-	if err != nil {
-		log.Fatal("invalid API host: " + err.Error())
-	}
-
-	if privKey == "" {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("please enter the private key: ")
-		b, _, err := reader.ReadLine()
-		if err != nil {
-			log.Fatal(err)
-		}
-		privKey = string(b)
-	}
-
-	Acc, Api, _, err = fio.NewWifConnect(privKey, nodeos)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	gi, err := Api.GetInfo()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if gi.HeadBlockTime.Time.After(time.Now().UTC().Add(30 * time.Second)) {
-		log.Printf("Head block time (%v) is after the default transaction timeout of 30s.", gi.HeadBlockTime.Time)
-		log.Fatal("Is your clock synced?")
-	}
-	switch gi.ChainID.String() {
-	case fio.ChainIdMainnet:
-		log.Println("connected to FIO mainnet")
-	case fio.ChainIdTestnet:
-		log.Println("connected to FIO testnet")
-	default:
-		if !unknown {
-			log.Fatal("refusing to connect to unknown chain id (not mainnet or testnet) override with'-unknown'")
-		}
-	}
-
-	if os.Getenv("DEBUG") != "" {
-		Verbose = true
-	}
-
-	if Query {
-		F, err = os.OpenFile(OutFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-
-	if InFile != "" {
-		F, err = os.OpenFile(InFile, os.O_RDONLY, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
