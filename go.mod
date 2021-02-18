@@ -3,6 +3,7 @@ module github.com/blockpane/fio-tools
 go 1.14
 
 require (
+	github.com/PagerDuty/go-pagerduty v1.3.0
 	github.com/aws/aws-lambda-go v1.20.0
 	github.com/blockpane/fio-extras v0.0.0-20201115054148-f4abad805e54
 	github.com/ethereum/go-ethereum v1.9.24

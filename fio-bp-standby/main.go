@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"github.com/PagerDuty/go-pagerduty"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"github.com/hpcloud/tail"
@@ -21,7 +22,21 @@ var (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
 	var err error
-	api, acc, nodeLog := opts()
+	var network string
+	api, acc, nodeLog, pgKey := opts()
+
+	gi, err := api.GetInfo()
+	if err != nil {
+		log.Fatal(err)
+	}
+	switch gi.ChainID.String() {
+	case fio.ChainIdMainnet:
+		network = "mainnet"
+	case fio.ChainIdTestnet:
+		network = "testnet"
+	default:
+		network = "unknown network"
+	}
 
 	// make sure producer API is even available
 	paused, err = api.IsProducerPaused()
@@ -123,8 +138,15 @@ func main() {
 				log.Println("could not resume producer: " + err.Error())
 				unhealthy = false // force recheck next interval.
 				paused = true
+				if e := notifyPagerduty(false, "could not resume producer: " + err.Error(), string(acc), pgKey, network); e != nil {
+					log.Println(e)
+				}
 			}
 			log.Println("enabled block production")
+			err = notifyPagerduty(false, "standby enabled block production", string(acc), pgKey, network)
+			if err != nil {
+				log.Println(err)
+			}
 			paused = false
 		}
 		return true
@@ -141,10 +163,18 @@ func main() {
 				err = api.ProducerPause()
 				if err != nil {
 					log.Println(err)
+					err = notifyPagerduty(false, "standby producer could not stop production", string(acc), pgKey, network)
+					if err != nil {
+						log.Println(err)
+					}
 					continue
 				}
 				paused = true
 				log.Println("successfully paused block production")
+				err = notifyPagerduty(true, "standby producer shutting down, primary is back", string(acc), pgKey, network)
+				if err != nil {
+					log.Println(err)
+				}
 			}
 
 		case <-byOrder:
@@ -392,7 +422,7 @@ func isTop21(neighbors *neighbor, api *fio.API, prod eos.AccountName) (active bo
 	return active, err
 }
 
-func opts() (api *fio.API, account eos.AccountName, logFile string) {
+func opts() (api *fio.API, account eos.AccountName, logFile string, pagerdutyKey string) {
 	var err error
 	fatal := func(e error) {
 		if e != nil {
@@ -404,6 +434,7 @@ func opts() (api *fio.API, account eos.AccountName, logFile string) {
 	flag.StringVar(&url, "u", "http://127.0.0.1:8888", "nodeos API to connect to")
 	flag.StringVar(&a, "a", "", "producer account to watch for")
 	flag.StringVar(&logFile, "f", "/var/log/fio/nodeos.log", "nodeos log file for detecting duplicate blocks")
+	flag.StringVar(&pagerdutyKey, "pager", "", "PagerDuty API key for notifications, optional")
 	flag.Parse()
 
 	api, _, err = fio.NewConnection(nil, url)
@@ -422,5 +453,28 @@ func opts() (api *fio.API, account eos.AccountName, logFile string) {
 	_, err = f.Stat()
 	fatal(err)
 
+	return
+}
+
+func notifyPagerduty(resolved bool, message string, producer string, key string, network string) (err error) {
+	if key == "" {
+		return nil
+	}
+	action := "trigger"
+	sev := "error"
+	if resolved {
+		action = "resolve"
+		sev = "info"
+	}
+	_, err = pagerduty.ManageEvent(pagerduty.V2Event{
+		RoutingKey: key,
+		Action:     action,
+		DedupKey:   producer,
+		Payload:    &pagerduty.V2Payload{
+			Summary:   network+" "+message,
+			Source:    producer,
+			Severity:  sev,
+		},
+	})
 	return
 }
