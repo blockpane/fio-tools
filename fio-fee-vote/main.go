@@ -14,8 +14,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,15 +30,15 @@ func main() {
 		return
 	}
 	if e := handler(); e != nil {
-		trace := log.Output(2, e.Error())
-		log.Fatal(trace)
+		_ = log.Output(2, e.Error())
+		os.Exit(1)
 	}
 }
 
 func handler() error {
 	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
-	var once, claim, skip bool
+	var once, claim, skip, simulate bool
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
@@ -49,8 +49,16 @@ func handler() error {
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
 	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
 	flag.BoolVar(&skip, "skip", false, "optional: skip feevote (only do feemult votes) alternate: SKIP env var")
+	flag.BoolVar(&simulate, "simulate", false, "optional: do not send any transactions, only print what would have been done, alternate: SIMULATE env var")
 	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
 	flag.Parse()
+
+	if strings.ToLower(os.Getenv("SIMULATE")) == "true" {
+		simulate = true
+	}
+	if simulate {
+		log.Println("Simulation mode, no transactions will be sent, actions will be printed.")
+	}
 
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
 		once = true
@@ -140,12 +148,14 @@ func handler() error {
 			break
 		}
 		custom := make([]*fio.FeeValue, 0)
-		f, err := os.OpenFile(customFees, os.O_RDONLY, 0644)
+		var f *os.File
+		f, err = os.OpenFile(customFees, os.O_RDONLY, 0644)
 		if err != nil {
 			log.Println("could not open custom fees")
 			return err
 		}
-		j, err := ioutil.ReadAll(f)
+		var j []byte
+		j, err = ioutil.ReadAll(f)
 		if err != nil {
 			return err
 		}
@@ -162,7 +172,7 @@ func handler() error {
 	}
 
 	for {
-		if ok, _ := isProducer(actor, claim, myName, api); !ok {
+		if ok, _ := isProducer(actor, claim, myName, api); !ok && !simulate {
 			log.Println("not an active producer, or other problems, waiting to set fees until registered")
 			time.Sleep(10 * time.Minute)
 			continue
@@ -172,10 +182,14 @@ func handler() error {
 			api.RefreshFees()
 			// may help to compress given the size of the request.
 			opt.Compress = fio.CompressionZlib
-			_, err := api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm),
-				fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFeeByAction("setfeevote")), Actor: actor},
-			).ToEos()}, &opt.TxOptions,
-			)
+			act := fio.SetFeeVote{FeeRatios: update, MaxFee: fio.Tokens(fio.GetMaxFeeByAction("setfeevote")), Actor: actor}
+			switch simulate {
+			case true:
+				printAction(act)
+				err = nil
+			default:
+				_, err = api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm), act).ToEos()}, &opt.TxOptions)
+			}
 			if err != nil {
 				log.Println(err)
 				log.Println("Could not update base fees, has it been an hour? Continuing anyway")
@@ -191,6 +205,10 @@ func handler() error {
 		// maint is a few maintenance calls all BPs should be calling to trigger fee updates, also adding a burnexpired to cleanup
 		// addresses that should be removed from state
 		maint := func() {
+			if simulate {
+				log.Println("would have sent fio.fee::computefees and fio.address::burnexpired")
+				return
+			}
 			// this can fail without consequence, try to call it several times across multiple blocks.
 			for i := 0; i < 3; i++ {
 				_, err = api.SignPushActions(fio.NewActionWithPermission("fio.fee", "computefees", actor, string(perm), fio.ComputeFees{}))
@@ -210,26 +228,30 @@ func handler() error {
 		// call the maintenance calls on the way out everytime, even if we didn't set fees/multiplier.
 		defer maint()
 
-		prices, err := getGecko()
+		var prices *coinTicker
+		var avg, defFee, current float64
+		var df uint64
+
+		prices, err = getGecko()
 		if err != nil {
 			return err
 		}
 		if prices.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
 			return errors.New("coingecko data was stale, aborting")
 		}
-		avg, err := prices.GetAvg()
+		avg, err = prices.GetAvg()
 		if err != nil {
 			return err
 		}
 
-		df, err := getRegFioAddrCost()
+		df, err = getRegFioAddrCost()
 		if err != nil {
 			return err
 		}
-		defaultFee := float64(df) / 1_000_000_000.0
-		multiplier := target / (defaultFee * avg)
+		defFee = float64(df) / 1_000_000_000.0
+		multiplier := target / (defFee * avg)
 
-		current, err := GetCurMult(actor, api)
+		current, err = GetCurMult(actor, api)
 		if err != nil {
 			return err
 		}
@@ -247,10 +269,15 @@ func handler() error {
 				Actor:      actor,
 				MaxFee:     fio.Tokens(fio.GetMaxFee(fio.FeeSubmitFeeMult)),
 			})
-			_, err := api.SignPushActions(act)
-			if err != nil {
-				log.Println(err)
-				// don't bail, try the ComputeFees call on the way out
+			switch simulate {
+			case true:
+				printAction(act)
+			default:
+				_, err = api.SignPushActions(act)
+				if err != nil {
+					log.Println(err)
+					// don't bail, try the ComputeFees call on the way out
+				}
 			}
 		} else {
 			log.Printf("Multiplier has not changed enough to re-submit: existing %f, proposed %f\n", current, multiplier)
@@ -264,6 +291,10 @@ func handler() error {
 		if !claim || myName == "" {
 			return
 		}
+		if simulate {
+			log.Println("would have called fio.treasury::bpclaim and fio.treasury::tpidclaim")
+			return
+		}
 		act := fio.NewActionWithPermission("fio.treasury", "bpclaim", actor, string(perm), fio.BpClaim{
 			FioAddress: myName,
 			Actor:      actor,
@@ -273,7 +304,7 @@ func handler() error {
 			log.Println(err)
 		}
 		act = fio.NewActionWithPermission("fio.treasury", "tpidclaim", actor, string(perm), fio.PayTpidRewards{
-			Actor:      actor,
+			Actor: actor,
 		})
 		_, err = api.SignPushActions(act)
 		if err != nil {
@@ -409,17 +440,23 @@ func needsBaseFees(fees []*fio.FeeValue, actor eos.AccountName, api *fio.API) (p
 		}
 		existing = append(existing, fio.FeeValue{EndPoint: v.EndPoint, Value: v.Value})
 	}
-	sort.Slice(existing, func(i, j int) bool {
-		return fees[i].EndPoint < fees[j].EndPoint
-	})
 	if len(existing) != len(fees) {
 		log.Printf("different number of fee values on-chain (%d) vs desired (%d)", len(existing), len(fees))
 		return fees, nil
 	}
-	for i := range existing {
+	// use a map instead of trying to compare slices
+	oldFee, newFee := make(map[string]int64), make(map[string]int64)
+	for _, v := range existing {
+		oldFee[v.EndPoint] = v.Value
+	}
+	for _, v := range fees {
+		newFee[v.EndPoint] = v.Value
+	}
+
+	for k, v := range newFee {
 		var sendDefault bool
-		if existing[i].EndPoint != fees[i].EndPoint || existing[i].Value != fees[i].Value {
-			log.Println("on-chain data differs for desired fee endpoint:", existing[i].EndPoint)
+		if oldFee[k] != v {
+			log.Println("on-chain data differs for desired fee endpoint:", k)
 			sendDefault = true
 		}
 		if sendDefault {
@@ -505,9 +542,9 @@ func GetCurMult(actor eos.AccountName, api *fio.API) (float64, error) {
 }
 
 type trimmedProd struct {
-	Owner eos.AccountName `json:"owner"`
-	FioAddress string `json:"fio_address"`
-	IsActive uint8 `json:"is_active"`
+	Owner      eos.AccountName `json:"owner"`
+	FioAddress string          `json:"fio_address"`
+	IsActive   uint8           `json:"is_active"`
 }
 
 func isProducer(actor eos.AccountName, claim bool, fioName string, api *fio.API) (bool, error) {
@@ -543,4 +580,13 @@ func isProducer(actor eos.AccountName, claim bool, fioName string, api *fio.API)
 		return false, err
 	}
 	return true, nil
+}
+
+func printAction(v ...interface{}) {
+	log.Println("would have sent transaction:")
+	j, err := json.MarshalIndent(v, "                    ", "  ")
+	if err != nil {
+		log.Println(err)
+	}
+	fmt.Println(string(j))
 }
