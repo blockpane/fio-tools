@@ -310,7 +310,8 @@ func DumpRequests() (ok bool, wrote int, err error) {
 			content.Request = &fio.ObtRequestContent{}
 		}
 		s := fmt.Sprintf(
-			`"%d",%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q`+"\n",
+			`"%s",%d",%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q`+"\n",
+			r.Time.String(),
 			r.FioRequestId,
 			r.PayerFioAddress,
 			r.PayerKey,
@@ -335,4 +336,3 @@ func DumpRequests() (ok bool, wrote int, err error) {
 	}
 	return ok, wrote, err
 }
-

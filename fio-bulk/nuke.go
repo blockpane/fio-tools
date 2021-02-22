@@ -1,38 +1,12 @@
 package bulk
 
 import (
-	"bufio"
-	"fmt"
+	"errors"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"log"
-	"os"
 	"strconv"
-	"strings"
 	"time"
-)
-
-const csvHeader = `"request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"` + "\n"
-
-var (
-	InFile  string
-	OutFile string
-
-	Acc *fio.Account
-	Api *fio.API
-	F   *os.File
-
-	Quiet   bool
-	Confirm bool
-	Nuke    bool
-	Verbose bool
-	Query   bool
-	SendFio float32
-)
-
-const (
-	bundleReject = 1
-	bundleRespond = 2
 )
 
 func NukeEmAll() (rejected int, err error) {
@@ -73,38 +47,16 @@ func NukeEmAll() (rejected int, err error) {
 }
 
 func RejectRequests() (rejected int, err error) {
-	requests := make([]string, 0)
-	reader := bufio.NewReader(F)
-	defer F.Close()
-	var e error
-	var l []byte
-	for {
-		l, _, e = reader.ReadLine()
-		if e != nil {
-			if e.Error() == "EOF" {
-				break
-			}
-			return rejected, e
-		}
-		var id int
-		id, e = strconv.Atoi(strings.TrimSpace(string(l)))
-		if e != nil {
-			log.Println("could not parse line:", l)
-			continue
-		}
-		pending, e := IsPending(id)
-		if e != nil {
-			log.Println(err)
-			continue
-		}
-		if pending {
-			requests = append(requests, strconv.Itoa(id))
-		} else {
-			log.Println("have already responded to id", id, "skipping")
-		}
+	stat, err := F.Stat()
+	if err != nil {
+		return 0, err
 	}
-	if Verbose {
-		fmt.Println(requests)
+	if stat.Size() <= 1 {
+		return 0, errors.New("empty file")
+	}
+	requests, e := slurp()
+	if e != nil {
+		return 0, err
 	}
 	for _, id := range requests {
 		resp := &eos.PushTransactionFullResp{}

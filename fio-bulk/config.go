@@ -11,20 +11,46 @@ import (
 	"time"
 )
 
+const csvHeader = `"timestamp_utc","request_id","payer","payer_fio","payee","payee_fio","address","amount","chain","token","memo","hash","url"` + "\n"
+
+var (
+	InFile  string
+	OutFile string
+	Name    string
+	Memo    string
+
+	Acc *fio.Account
+	Api *fio.API
+	F   *os.File
+
+	Quiet   bool
+	Confirm bool
+	Nuke    bool
+	Verbose bool
+	Query   bool
+	SendFio float64
+)
+
 func Options() {
-	var nodeos, privKey, memo string
+	var nodeos, privKey string
 	var unknown bool
 
 	flag.StringVar(&privKey, "k", "", "private key in WIF format, if absent will prompt")
 	flag.StringVar(&InFile, "in", "", "file containing FIO request IDs to reject, incompatible with -out, invokes reqobt::rejectfndreq")
 	flag.StringVar(&OutFile, "out", "", "file to dump all outstanding FIO requests into, will be in .CSV format and include decrypted request details")
+	flag.StringVar(&Name, "name", "", "FIO name for requests (required)")
 	flag.StringVar(&nodeos, "u", "https://testnet.fioprotocol.io", "FIO API endpoint to use")
-	flag.StringVar(&memo, "memo", "", "memo to send with responses, does not apply to bulk-reject or nuke only with 'confirm'")
-	flag.BoolVar(&Confirm, "confirm", false, "true sends a 'recordobt' response, false sends a 'rejectfndreq' only applies with '-in' option")
+	flag.StringVar(&Memo, "memo", "", "memo to send with responses, does not apply to rejected requests: only with '-record'")
+	flag.BoolVar(&Confirm, "record", false, "true sends a 'recordobt' response, false sends a 'rejectfndreq' only applies with '-in' option")
 	flag.BoolVar(&Nuke, "nuke", false, "don't print, don't check, nuke all pending requests. Incompatible with -in -out")
 	flag.BoolVar(&unknown, "unknown", false, "allow connecting to unknown chain id")
 	flag.BoolVar(&Quiet, "y", false, "assume 'yes' to all questions")
+	flag.Float64Var(&SendFio, "fio", 0.0, "amount of whole FIO (as a float) to send via 'trnsfiopubky' with each response (only applies if '-record=true')")
 	flag.Parse()
+
+	if Name == "" {
+		log.Fatal("FIO address '-name' option is missing")
+	}
 
 	switch true {
 	case InFile == "" && OutFile == "" && !Nuke:

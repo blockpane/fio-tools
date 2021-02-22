@@ -32,10 +32,20 @@ func main() {
 		os.Exit(0)
 	case bulk.Confirm:
 		// handle positive responses here.
+		success, fails, err := bulk.Respond()
+		log.Printf("sucessfully responded to %d requests, %d failed from %s\n", success, fails, bulk.InFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	default:
+		// finally, delete requests from the list
+		rejected, err := bulk.RejectRequests()
+		log.Printf("rejected %d requests from %s\n", rejected, bulk.InFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 	}
-	rejected, err := bulk.RejectRequests()
-	log.Printf("rejected %d requests from %s\n", rejected, bulk.InFile)
-	if err != nil {
-		log.Fatal(err)
-	}
+
 }
