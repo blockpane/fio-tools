@@ -10,6 +10,7 @@ import (
 	"golang.org/x/text/message"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"sync"
@@ -180,8 +181,27 @@ func (bp *BpRank) getBpJson(api *fio.API) error {
 	if bpj.Nodes != nil && len(bpj.Nodes) > 0 {
 		bp.BpJson = true
 	}
-	if resp, err := http.Get(bpj.BpJsonUrl); err == nil && resp != nil {
-		if resp.Header.Get("Access-Control-Allow-Origin") == "*" {
+
+	// Correctly add an Origin header on this request, not all servers return CORS headers unless asked for them.
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", bpj.BpJsonUrl, nil)
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse(bpj.BpJsonUrl)
+	origin := u.Scheme + "://" + u.Host
+	if u.Port() != "" {
+		origin += ":"+u.Port()
+	}
+	req.Header.Set("Origin", origin)
+	//if origin == "https://blockpane.com" {
+	//	fmt.Printf("%s REQUEST -- %+v\n", origin, req.Header)
+	//}
+	if resp, err := client.Do(req); err == nil && resp != nil {
+		//if origin == "https://blockpane.com" {
+		//	fmt.Printf("%s -- %+v\n", origin, resp.Header)
+		//}
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
 			bp.BpJsonCors = true
 		}
 	}
