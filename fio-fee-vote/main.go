@@ -304,7 +304,7 @@ Example of json input format for '--fees' flag / JSON env var:
 			default:
 				_, err = api.SignPushActions(act)
 				if err != nil {
-					log.Println(err)
+					log.Println("Setting fees failed:", err)
 					// don't bail, try the ComputeFees call on the way out
 				}
 			}
