@@ -255,7 +255,7 @@ func getEligible(api *fio.API) ([]string, error) {
 	}
 	registered := make(map[string]bool)
 	for _, p := range gp.Producers {
-		if p.IsActive == 0 {
+		if p.IsActive == 0 || p.TotalVotes == `0.00000000000000000` {
 			continue
 		}
 

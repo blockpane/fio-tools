@@ -77,7 +77,7 @@ func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]s
 	func() {
 		r := make([]*BpRank, 0)
 		for _, bpr := range eligible {
-			if bps[bpr].hasNoVotes && !bps[bpr].HasClaimed {
+			if bps[bpr] == nil || bps[bpr].hasNoVotes && !bps[bpr].HasClaimed {
 				continue
 			}
 			r = append(r, bps[bpr])
