@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -11,7 +13,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
-	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -38,7 +39,7 @@ func main() {
 func handler() error {
 	var a, p, wif, nodeos, sTarget, customFees, myName string
 	var frequency int
-	var once, claim, skip, simulate bool
+	var once, claim, skip, simulate, example bool
 	flag.StringVar(&a, "actor", "", "optional: account to use for delegated permission, alternate: ACTOR env var")
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
@@ -50,8 +51,31 @@ func handler() error {
 	flag.BoolVar(&claim, "claim", false, "optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var")
 	flag.BoolVar(&skip, "skip", false, "optional: skip feevote (only do feemult votes) alternate: SKIP env var")
 	flag.BoolVar(&simulate, "simulate", false, "optional: do not send any transactions, only print what would have been done, alternate: SIMULATE env var")
+	flag.BoolVar(&example, "example", false, "print out the default fees that fio-fee-vote would use and exit.")
 	flag.StringVar(&myName, "name", "", "optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var")
+	flag.Usage = func() {
+		flag.PrintDefaults()
+		fmt.Println(`
+Example of json input format for '--fees' flag / JSON env var:
+
+[
+  {
+    "end_point": "add_pub_address",
+    "value": 30000000
+  },
+  {
+    "end_point": "add_to_whitelist",
+    "value": 30000000
+  }
+]`)
+	}
 	flag.Parse()
+
+	if example {
+		j, _ := json.MarshalIndent(defaultFee(), "", "  ")
+		fmt.Println(string(j))
+		os.Exit(0)
+	}
 
 	if strings.ToLower(os.Getenv("SIMULATE")) == "true" {
 		simulate = true
@@ -160,10 +184,15 @@ func handler() error {
 			return err
 		}
 		_ = f.Close()
-		err = json.Unmarshal(j, &update)
+		err = json.Unmarshal(j, &custom)
 		if err != nil {
 			log.Println("could not parse custom fees")
 			return err
+		}
+		if len(custom) == 0 {
+			log.Println("WARNING: json file provided had no entries, or was not in the correct format. Will not attempt fee updates.")
+			skip = true
+			break
 		}
 		update, err = needsBaseFees(custom, actor, api)
 		if err != nil && once {
@@ -275,7 +304,7 @@ func handler() error {
 			default:
 				_, err = api.SignPushActions(act)
 				if err != nil {
-					log.Println(err)
+					log.Println("Setting fees failed:", err)
 					// don't bail, try the ComputeFees call on the way out
 				}
 			}
@@ -313,7 +342,7 @@ func handler() error {
 	}
 
 	ok, err := isProducer(actor, claim, myName, api)
-	if ok && err != nil {
+	if ok && err == nil {
 		doClaims()
 		err = setMultiplier()
 	}
@@ -321,7 +350,6 @@ func handler() error {
 	if once {
 		return err
 	}
-	rand.Seed(time.Now().UnixNano()) // #nosec
 	ticker := time.NewTicker(time.Duration(frequency) * time.Hour)
 	for {
 		select {
@@ -329,13 +357,13 @@ func handler() error {
 			go func() {
 				ok, err = isProducer(actor, claim, myName, api)
 				if !ok {
-					log.Println("problems with registration preventing maintenance, sleeping")
+					log.Println("problems with registration (is account a registered producer?), sleeping")
 					return
 				}
 				doClaims()
 				// add some variability to when this starts, less predictability makes it less likely to be subjected
 				// to timing / flash attacks.
-				time.Sleep(time.Duration(rand.Intn(10)) * time.Minute) // #nosec
+				time.Sleep(time.Duration(intRand(10)) * time.Minute)
 				if err = setMultiplier(); err != nil {
 					log.Println(err)
 				}
@@ -463,7 +491,7 @@ func needsBaseFees(fees []*fio.FeeValue, actor eos.AccountName, api *fio.API) (p
 			return fees, nil
 		}
 	}
-	return nil, errors.New("unknown error checking feevote")
+	return nil, nil
 }
 
 // coinTicker holds a trimmed down response from the coingecko api
@@ -589,4 +617,16 @@ func printAction(v ...interface{}) {
 		log.Println(err)
 	}
 	fmt.Println(string(j))
+}
+
+// better than math's rand.Intn which is eerily predictable
+func intRand(i int) int {
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Println("could not get bytes from RNG")
+		panic(err)
+	}
+	// strip possible signed bit, cast, and return modulus
+	return int(binary.LittleEndian.Uint32(b) >> 1) % i
 }

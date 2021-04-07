@@ -62,7 +62,14 @@ func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]s
 	}
 	wg.Wait()
 
+	if eligible == nil {
+		return nil, errors.New("eligible voter slice was nil")
+	}
+
 	sort.Slice(eligible, func(i, j int) bool {
+		if bps == nil || bps[eligible[i]] == nil || bps[eligible[j]] == nil {
+			return false
+		}
 		return bps[eligible[i]].Score > bps[eligible[j]].Score
 	})
 

@@ -258,6 +258,33 @@ func getEligible(api *fio.API) ([]string, error) {
 		if p.IsActive == 0 {
 			continue
 		}
+
+		// don't rank producers with expired addresses
+		var reg fio.FioNames
+		var found bool
+		reg, found, err = api.GetFioNamesForActor(string(p.Owner))
+		if !found || err != nil {
+			continue
+		}
+		if !func () bool {
+			for _, address := range reg.FioAddresses {
+				if string(p.FioAddress) == (address.FioAddress) {
+					t, e := time.Parse("2006-01-02T15:04:05", address.Expiration)
+					if e != nil {
+						log.Println("error parsing expiration date for", p.FioAddress)
+						return false
+					}
+					if t.After(time.Now()) {
+						return true
+					}
+					log.Println(p.FioAddress, "is expired!")
+				}
+			}
+			return false
+		}() {
+			continue
+		}
+
 		registered[string(p.FioAddress)] = true
 	}
 	if V {
