@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
@@ -18,39 +17,39 @@ import (
 )
 
 // updateWorker asynchronously fires various functions that update state data
-func updateWorker(ctx context.Context) {
+func (fst *feeState) updateWorker() {
 	t := time.NewTicker(time.Duration(update) * time.Minute)
 	for {
 		select {
 		case <-t.C:
 			// DELETEME: debug
-			j, _ := json.MarshalIndent(ctx.Value("state"), "", "  ")
+			j, _ := json.MarshalIndent(fst, "", "  ")
 			fmt.Println(string(j))
 
-			if !ctx.Value("state").(*feeState).priceBusy {
+			if !fst.priceBusy {
 				go func() {
-					if e := updatePrice(ctx); e != nil {
+					if e := fst.updatePrice(); e != nil {
 						log.Println("ERROR: could not update price", e)
 					}
 				}()
 			}
-			if !ctx.Value("state").(*feeState).votes2Busy {
+			if !fst.votes2Busy {
 				go func() {
-					if e := updateFeeVotes(ctx); e != nil {
+					if e := fst.updateFeeVotes(); e != nil {
 						log.Println("ERROR: could not update feevotes2", e)
 					}
 				}()
 			}
-			if !ctx.Value("state").(*feeState).votersBusy {
+			if !fst.votersBusy {
 				go func() {
-					if e := updateFeeVoters(ctx); e != nil {
+					if e := fst.updateFeeVoters(); e != nil {
 						log.Println("ERROR: could not update feevoters", e)
 					}
 				}()
 			}
-			if !ctx.Value("state").(*feeState).prodBusy {
+			if !fst.prodBusy {
 				go func() {
-					if e := updateProducers(ctx); e != nil {
+					if e := fst.updateProducers(); e != nil {
 						log.Println("ERROR: could not update producers", e)
 					}
 				}()
@@ -86,13 +85,13 @@ type feeState struct {
 }
 
 // ready responds with true if we have data sufficient to provide responses
-func ready(ctx context.Context) bool {
+func (fst *feeState) ready() bool {
 	switch true {
 	// is any data more than 5 minutes stale?
-	case ctx.Value("state").(*feeState).PriceUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		ctx.Value("state").(*feeState).FeeVotersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		ctx.Value("state").(*feeState).ProducersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		ctx.Value("state").(*feeState).FeeVotesUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)):
+	case fst.PriceUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
+		fst.FeeVotersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
+		fst.ProducersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
+		fst.FeeVotesUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)):
 		return false
 	default:
 		return true
@@ -116,7 +115,7 @@ func getApi(workerName string, servers []string) (api *fio.API) {
 			e(err.Error())
 			continue
 		}
-		log.Println(workerName, "INFO: selected", api.BaseURL, "api server")
+		log.Println("INFO:", workerName, "connected to", api.BaseURL)
 		info, err = api.GetInfo()
 		if err != nil {
 			e(err.Error())
@@ -156,10 +155,10 @@ type coinTick struct {
 }
 
 // updatePrice populates the current price in our state
-func updatePrice(ctx context.Context) error {
-	ctx.Value("state").(*feeState).priceBusy = true
+func (fst *feeState) updatePrice() error {
+	fst.priceBusy = true
 	defer func() {
-		ctx.Value("state").(*feeState).priceBusy = false
+		fst.priceBusy = false
 	}()
 	ct, e := getGecko()
 	if e != nil {
@@ -170,11 +169,12 @@ func updatePrice(ctx context.Context) error {
 		return e
 	}
 	// not a very thorough check, but should catch serious problems
-	if avg < 0 || (ctx.Value("state").(*feeState).Price != 0 && avg > ctx.Value("state").(*feeState).Price*2) {
+	if avg < 0 || (fst.Price != 0 && avg > fst.Price*2) {
 		return fmt.Errorf("impossible price from coingecko %f", avg)
 	}
-	ctx.Value("state").(*feeState).Price = avg
-	ctx.Value("state").(*feeState).PriceUpdated = time.Now().UTC()
+	fst.Price = avg
+	log.Println("INFO: updated price to", avg)
+	fst.PriceUpdated = time.Now().UTC()
 	return nil
 }
 
@@ -215,14 +215,13 @@ func (t *coinTicker) getAvg() (float64, error) {
 }
 
 // updateFeeVotes fetches the current feevotes2 table and stores it in state.
-func updateFeeVotes(ctx context.Context) error {
-	ctx.Value("state").(*feeState).votes2Busy = true
+func (fst *feeState) updateFeeVotes() error {
+	fst.votes2Busy = true
 	defer func() {
-		ctx.Value("state").(*feeState).votes2Busy = false
+		fst.votes2Busy = false
 	}()
-	mux := &ctx.Value("state").(*feeState).votes2Mux
-	mux.Lock()
-	defer mux.Unlock()
+	fst.votes2Mux.Lock()
+	defer fst.votes2Mux.Unlock()
 	api := getApi("updateFeeVotes", producers)
 	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:  "fio.fee",
@@ -242,8 +241,8 @@ func updateFeeVotes(ctx context.Context) error {
 	if len(result) == 0 {
 		return errors.New("empty query response from updateFeeVotes")
 	}
-	ctx.Value("state").(*feeState).FeeVotes = result
-	ctx.Value("state").(*feeState).FeeVotesUpdated = time.Now().UTC()
+	fst.FeeVotes = result
+	fst.FeeVotesUpdated = time.Now().UTC()
 	return nil
 }
 
@@ -265,14 +264,13 @@ func (fvs feeVoterString) toFeeVoter() *fio.FeeVoter {
 }
 
 // updateFeeVoters fetches the current feevoters table and stores it in state.
-func updateFeeVoters(ctx context.Context) error {
-	ctx.Value("state").(*feeState).votersBusy = true
+func (fst *feeState) updateFeeVoters() error {
+	fst.votersBusy = true
 	defer func() {
-		ctx.Value("state").(*feeState).votersBusy = false
+		fst.votersBusy = false
 	}()
-	mux := &ctx.Value("state").(*feeState).votersMux
-	mux.Lock()
-	defer mux.Unlock()
+	fst.votersMux.Lock()
+	defer fst.votersMux.Unlock()
 	api := getApi("updateFeeVoters", producers)
 	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:  "fio.fee",
@@ -296,20 +294,19 @@ func updateFeeVoters(ctx context.Context) error {
 	for i := range result {
 		fv[i] = result[i].toFeeVoter()
 	}
-	ctx.Value("state").(*feeState).FeeVoters = fv
-	ctx.Value("state").(*feeState).FeeVotersUpdated = time.Now().UTC()
+	fst.FeeVoters = fv
+	fst.FeeVotersUpdated = time.Now().UTC()
 	return nil
 }
 
 // updateProducers fetches the current Producers table and stores it in state.
-func updateProducers(ctx context.Context) error {
-	ctx.Value("state").(*feeState).prodBusy = true
+func (fst *feeState)  updateProducers() error {
+	fst.prodBusy = true
 	defer func() {
-		ctx.Value("state").(*feeState).prodBusy = false
+		fst.prodBusy = false
 	}()
-	mux := &ctx.Value("state").(*feeState).prodMux
-	mux.Lock()
-	defer mux.Unlock()
+	fst.prodMux.Lock()
+	defer fst.prodMux.Unlock()
 	api := getApi("updateProducers", producers)
 	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
 		Code:  "eosio",
@@ -329,8 +326,8 @@ func updateProducers(ctx context.Context) error {
 	if len(result) == 0 {
 		return errors.New("empty query response from updateProducers")
 	}
-	ctx.Value("state").(*feeState).Producers = result
-	ctx.Value("state").(*feeState).ProducersUpdated = time.Now().UTC()
+	fst.Producers = result
+	fst.ProducersUpdated = time.Now().UTC()
 	return nil
 }
 

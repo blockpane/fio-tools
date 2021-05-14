@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"github.com/fioprotocol/fio-go"
 	"log"
@@ -47,14 +46,14 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	options()
 
-	ctx := context.WithValue(context.Background(), "state", &feeState{
+	fst := &feeState{
 		FeeVotes:  make([]*fio.FeeVote2, 0),
 		FeeVoters: make([]*fio.FeeVoter, 0),
 		Producers: make([]*fio.Producer, 0),
-	})
+	}
 
 	// update state data in the background
-	go updateWorker(ctx)
+	go fst.updateWorker()
 
 	select {}
 }
@@ -77,7 +76,7 @@ func options() {
 		}
 		port = int(p)
 		fallthrough
-	case os.Getenv("UPDATE") != "":
+	case os.Getenv("UPDATE") == "":
 		u, e := strconv.ParseInt(os.Getenv("UPDATE"), 10, 32)
 		if e != nil {
 			log.Fatal("Invalid UPDATE env var:", e)
