@@ -40,17 +40,16 @@ var producers = []string{
 var (
 	port, update int
 	srvrs        string
+	fst          = &feeState{
+		FeeVotes:  make([]*fio.FeeVote2, 0),
+		FeeVoters: make([]*fio.FeeVoter, 0),
+		Producers: make([]*fio.Producer, 0),
+	}
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	options()
-
-	fst := &feeState{
-		FeeVotes:  make([]*fio.FeeVote2, 0),
-		FeeVoters: make([]*fio.FeeVoter, 0),
-		Producers: make([]*fio.Producer, 0),
-	}
 
 	// update state data in the background
 	go fst.updateWorker()
