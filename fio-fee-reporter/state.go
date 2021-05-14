@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-
 // feeVoterString is an intermediary structure for handling the query response.
 // Not sure what's going on here, FeeMultiplier should be a float but getting a string?!?
 type feeVoterString struct {
@@ -60,7 +59,6 @@ type feeState struct {
 	prodBusy         bool
 }
 
-
 // updateWorker asynchronously fires various functions that update state data
 func (fst *feeState) updateWorker() {
 	t := time.NewTicker(time.Duration(update) * time.Minute)
@@ -102,7 +100,6 @@ func (fst *feeState) updateWorker() {
 		}
 	}
 }
-
 
 // updateFeeVotes fetches the current feevotes2 table and stores it in state.
 func (fst *feeState) updateFeeVotes() error {
@@ -173,7 +170,7 @@ func (fst *feeState) updateFeeVoters() error {
 }
 
 // updateProducers fetches the current Producers table and stores it in state.
-func (fst *feeState)  updateProducers() error {
+func (fst *feeState) updateProducers() error {
 	fst.prodBusy = true
 	defer func() {
 		fst.prodBusy = false
@@ -217,7 +214,6 @@ func (fst *feeState) ready() bool {
 		return true
 	}
 }
-
 
 // updatePrice populates the current price in our state
 func (fst *feeState) updatePrice() error {
@@ -289,7 +285,6 @@ func (t *coinTicker) getAvg() (float64, error) {
 	}
 	return total / count, nil
 }
-
 
 // getApi works through a list of public API endpoints, trying until it finds a working endpoint. This is
 // to ensure not any one producer being down breaks the service.

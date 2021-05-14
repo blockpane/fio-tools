@@ -39,7 +39,7 @@ var producers = []string{
 
 var (
 	port, update int
-	srvrs string
+	srvrs        string
 )
 
 func main() {
@@ -97,4 +97,3 @@ func options() {
 		}
 	}
 }
-
