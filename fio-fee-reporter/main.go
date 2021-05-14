@@ -6,13 +6,16 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/fioprotocol/fio-go"
 	"github.com/fioprotocol/fio-go/eos"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -45,8 +48,14 @@ var producers = []string{
 	"https://fioapi.ledgerwise.io",         //  Ledgerwise
 }
 
+var (
+	port, update int
+	srvrs string
+)
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	options()
 
 	ctx := context.WithValue(context.Background(), "state", &feeState{
 		FeeVotes:  make([]*fio.FeeVote2, 0),
@@ -60,9 +69,49 @@ func main() {
 	select {}
 }
 
+// options parses command line flags, or uses env vars for settings.
+func options() {
+	flag.StringVar(&srvrs, "servers", "", "optional: list of nodeos servers to use, comma seperated (alt env: SERVERS)")
+	flag.IntVar(&port, "p", 8000, "port to listen on for incoming rest requests (alt env: PORT)")
+	flag.IntVar(&update, "update", 1, "update frequency for source data in minutes (alt env: UPDATE")
+	flag.Parse()
+
+	switch false {
+	case os.Getenv("SERVERS") == "":
+		srvrs = os.Getenv("SERVERS")
+		fallthrough
+	case os.Getenv("PORT") == "":
+		p, e := strconv.ParseInt(os.Getenv("PORT"), 10, 32)
+		if e != nil {
+			log.Fatal("Invalid PORT env var:", e)
+		}
+		port = int(p)
+		fallthrough
+	case os.Getenv("UPDATE") != "":
+		u, e := strconv.ParseInt(os.Getenv("UPDATE"), 10, 32)
+		if e != nil {
+			log.Fatal("Invalid UPDATE env var:", e)
+		}
+		update = int(u)
+	}
+
+	if srvrs != "" {
+		p := strings.Split(srvrs, ",")
+		if len(p) > 0 {
+			for i := range p {
+				p[i] = strings.TrimSpace(p[i])
+				if !strings.HasPrefix(p[i], "http") {
+					log.Fatal("invalid server URL:", p[i])
+				}
+			}
+			producers = p
+		}
+	}
+}
+
 // updateWorker asynchronously fires various functions that update state data
 func updateWorker(ctx context.Context) {
-	t := time.NewTicker(15 * time.Second)
+	t := time.NewTicker(time.Duration(update) * time.Minute)
 	for {
 		select {
 		case <-t.C:
@@ -221,6 +270,7 @@ func updatePrice(ctx context.Context) error {
 	return nil
 }
 
+// getGecko pulls price feed data from coingecko
 func getGecko() (*coinTicker, error) {
 	const gecko = `https://api.coingecko.com/api/v3/coins/fio-protocol?localization=false&tickers=true&market_data=false&community_data=false&developer_data=false&sparkline=false`
 
@@ -241,7 +291,7 @@ func getGecko() (*coinTicker, error) {
 	return t, nil
 }
 
-// GetAvg finds all the current USDT exchange rates and calculates an average price
+// getAvg finds all the current USDT exchange rates and calculates an average price
 func (t *coinTicker) getAvg() (float64, error) {
 	var total, count float64
 	for i := range t.Tickers {
