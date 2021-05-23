@@ -1,0 +1,198 @@
+---
+
+swagger: '2.0'
+info:
+  title: fio-fee-reporter
+  description: Provides information about FIO fees
+  version: 0.0.1
+schemes:
+  - https
+host: fio-fee.blockpane.com
+basePath: /v1
+
+paths:
+  /fee:
+    get:
+      description: list all fees in whole FIO as a float
+      responses:
+        200:
+          description: An array of prices for each action in FIO
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Price"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/usd:
+    get:
+      description: List all fees in USD
+      responses:
+        200:
+          description: An array of prices for each action in USD
+          schema:
+            $ref: "#/definitions/Price"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/votes/{producer}:
+    get:
+      description: list a producer's fee vote in whole FIO as a float
+      parameters:
+        - name: producer
+          in: path
+          required: true
+          description: The producer's account
+          type: string
+      responses:
+        200:
+          description: An array of prices for each action in FIO based on the producer's votes
+          schema:
+            $ref: "#/definitions/Price"
+        404:
+          description: Did not find a matching producer
+          schema:
+            $ref: "#/definitions/Error"
+        400:
+          description: Invalid account format, should be a 12 character string
+          schema:
+            $ref: "#/definitions/Error"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/votes/{producer}/usd:
+    get:
+      description: list a producer's fee vote in USD as a float
+      parameters:
+        - name: producer
+          in: path
+          required: true
+          description: The producer's account
+          type: string
+      responses:
+        200:
+          description: An array of prices for each action in USD based on the producer's votes
+          schema:
+            $ref: "#/definitions/Price"
+        404:
+          description: Did not find a matching producer
+          schema:
+            $ref: "#/definitions/Error"
+        400:
+          description: Invalid account format, should be a 12 character string
+          schema:
+            $ref: "#/definitions/Error"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+              $ref: "#/definitions/Error"
+  /fee/votes/feevote/{producer}:
+    get:
+      description: list a producer's fee votes
+      parameters:
+        - name: producer
+          in: path
+          required: true
+          description: The producer's account
+          type: string
+      responses:
+        200:
+          description: The base fee in SUF used for calculating a producer's vote, before applying multiplier
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Feevote"
+        404:
+          description: Did not find a matching producer
+          schema:
+            $ref: "#/definitions/Error"
+        400:
+          description: Invalid account format, should be a 12 character string
+          schema:
+            $ref: "#/definitions/Error"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/votes/multiplier/{producer}:
+    get:
+      description: list a producer's multiplier
+      parameters:
+        - name: producer
+          in: path
+          required: true
+          description: The producer's account
+          type: string
+      responses:
+        200:
+          description: The currently used fee multiplier which is applied to the fee vote to determine price
+          schema:
+            properties:
+              multiplier:
+                type: number
+                format: float32
+        404:
+          description: Did not find a matching producer
+          schema:
+            $ref: "#/definitions/Error"
+        400:
+          description: Invalid account format, should be a 12 character string
+          schema:
+            $ref: "#/definitions/Error"
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /price:
+    get:
+      description: The current price used for calculations, as provided by Coingecko.com
+      responses:
+        200:
+          description: Price in USD averaged across exchanges based on USDT/USDC trading pairs
+          schema:
+            properties:
+              price:
+                type: number
+                format: float32
+        503:
+          description: Data is stale, has not been updated for more than five minutes
+          schema:
+            $ref: "#/definitions/Error"
+
+definitions:
+  Error:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+  Price:
+    required:
+      - end_point
+      - price
+    properties:
+      end_point:
+        type: string
+      price:
+        type: number
+        format: float32
+  Feevote:
+    required:
+      - end_point
+      - value
+      - timestamp
+    properties:
+      end_point:
+        description: the fee endpoint
+        type: string
+      value:
+        description: the fee vote in smallest units of FIO (1,000,000,000 SUF = 1 FIO)
+        type: integer
+        format: uint64
+      timestamp:
+        description: Unix timestap of when the fee vote was set
+        type: integer
+        format: uint64
