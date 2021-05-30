@@ -45,6 +45,12 @@ func NewFeeAPI(spec *loads.Document) *FeeAPI {
 		GetFeeHandler: GetFeeHandlerFunc(func(params GetFeeParams) middleware.Responder {
 			return middleware.NotImplemented("operation GetFee has not yet been implemented")
 		}),
+		GetFeeByActionNameHandler: GetFeeByActionNameHandlerFunc(func(params GetFeeByActionNameParams) middleware.Responder {
+			return middleware.NotImplemented("operation GetFeeByActionName has not yet been implemented")
+		}),
+		GetFeeByActionNameUsdHandler: GetFeeByActionNameUsdHandlerFunc(func(params GetFeeByActionNameUsdParams) middleware.Responder {
+			return middleware.NotImplemented("operation GetFeeByActionNameUsd has not yet been implemented")
+		}),
 		GetFeeUsdHandler: GetFeeUsdHandlerFunc(func(params GetFeeUsdParams) middleware.Responder {
 			return middleware.NotImplemented("operation GetFeeUsd has not yet been implemented")
 		}),
@@ -101,6 +107,10 @@ type FeeAPI struct {
 
 	// GetFeeHandler sets the operation handler for the get fee operation
 	GetFeeHandler GetFeeHandler
+	// GetFeeByActionNameHandler sets the operation handler for the get fee by action name operation
+	GetFeeByActionNameHandler GetFeeByActionNameHandler
+	// GetFeeByActionNameUsdHandler sets the operation handler for the get fee by action name usd operation
+	GetFeeByActionNameUsdHandler GetFeeByActionNameUsdHandler
 	// GetFeeUsdHandler sets the operation handler for the get fee usd operation
 	GetFeeUsdHandler GetFeeUsdHandler
 	// GetFeeVotesFeevoteProducerHandler sets the operation handler for the get fee votes feevote producer operation
@@ -192,6 +202,12 @@ func (o *FeeAPI) Validate() error {
 
 	if o.GetFeeHandler == nil {
 		unregistered = append(unregistered, "GetFeeHandler")
+	}
+	if o.GetFeeByActionNameHandler == nil {
+		unregistered = append(unregistered, "GetFeeByActionNameHandler")
+	}
+	if o.GetFeeByActionNameUsdHandler == nil {
+		unregistered = append(unregistered, "GetFeeByActionNameUsdHandler")
 	}
 	if o.GetFeeUsdHandler == nil {
 		unregistered = append(unregistered, "GetFeeUsdHandler")
@@ -303,6 +319,14 @@ func (o *FeeAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/fee"] = NewGetFee(o.context, o.GetFeeHandler)
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/fee/byActionName"] = NewGetFeeByActionName(o.context, o.GetFeeByActionNameHandler)
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/fee/byActionName/usd"] = NewGetFeeByActionNameUsd(o.context, o.GetFeeByActionNameUsdHandler)
 	if o.handlers["GET"] == nil {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}

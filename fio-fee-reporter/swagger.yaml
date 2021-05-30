@@ -7,7 +7,8 @@ info:
   version: 0.0.1
 schemes:
   - https
-host: fio-fee.blockpane.com
+  - http
+#host: fio-fee.blockpane.com
 basePath: /v1
 
 paths:
@@ -16,13 +17,13 @@ paths:
       description: list all fees in whole FIO as a float
       responses:
         200:
-          description: An array of prices for each action in FIO
+          description: An array of prices for each endpoint in FIO
           schema:
             type: array
             items:
               $ref: "#/definitions/Price"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
   /fee/usd:
@@ -36,7 +37,35 @@ paths:
             items:
               $ref: "#/definitions/Price"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/byActionName:
+    get:
+      description: list all fees in whole FIO as a float
+      responses:
+        200:
+          description: An array of prices for each action in FIO
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Price"
+        503:
+          description: Data is stale, has not been updated for several minutes
+          schema:
+            $ref: "#/definitions/Error"
+  /fee/byActionName/usd:
+    get:
+      description: List all fees in USD
+      responses:
+        200:
+          description: An array of prices for each action in USD
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Price"
+        503:
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
   /fee/votes/{producer}:
@@ -50,7 +79,7 @@ paths:
           type: string
       responses:
         200:
-          description: An array of prices for each action in FIO based on the producer's votes
+          description: An array of prices for each endpoint in FIO based on the producer's votes
           schema:
             type: array
             items:
@@ -64,7 +93,7 @@ paths:
           schema:
             $ref: "#/definitions/Error"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
   /fee/votes/{producer}/usd:
@@ -78,7 +107,7 @@ paths:
           type: string
       responses:
         200:
-          description: An array of prices for each action in USD based on the producer's votes
+          description: An array of prices for each endpoint in USD based on the producer's votes
           schema:
             $ref: "#/definitions/Price"
         404:
@@ -90,7 +119,7 @@ paths:
           schema:
             $ref: "#/definitions/Error"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
               $ref: "#/definitions/Error"
   /fee/votes/feevote/{producer}:
@@ -118,7 +147,7 @@ paths:
           schema:
             $ref: "#/definitions/Error"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
   /fee/votes/multiplier/{producer}:
@@ -138,6 +167,10 @@ paths:
               multiplier:
                 type: number
                 format: float32
+              timestamp:
+                description: Unix timestap of when the fee vote was set
+                type: integer
+                format: uint64
         404:
           description: Did not find a matching producer
           schema:
@@ -147,7 +180,7 @@ paths:
           schema:
             $ref: "#/definitions/Error"
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
   /price:
@@ -162,7 +195,7 @@ paths:
                 type: number
                 format: float32
         503:
-          description: Data is stale, has not been updated for more than five minutes
+          description: Data is stale, has not been updated for several minutes
           schema:
             $ref: "#/definitions/Error"
 

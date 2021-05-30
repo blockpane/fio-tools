@@ -65,6 +65,9 @@ type GetFeeVotesMultiplierProducerOKBody struct {
 
 	// multiplier
 	Multiplier float64 `json:"multiplier,omitempty"`
+
+	// Unix timestap of when the fee vote was set
+	Timestamp uint64 `json:"timestamp,omitempty"`
 }
 
 // Validate validates this get fee votes multiplier producer o k body

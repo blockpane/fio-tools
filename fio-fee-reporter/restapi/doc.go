@@ -4,8 +4,9 @@
 //
 //  Provides information about FIO fees
 //  Schemes:
+//    http
 //    https
-//  Host: fio-fee.blockpane.com
+//  Host: localhost
 //  BasePath: /v1
 //  Version: 0.0.1
 //

@@ -250,9 +250,9 @@ func (fst *feeState) updateProducers() error {
 
 // ready responds with true if we have data sufficient to provide responses
 func (fst *feeState) ready() bool {
-	updated := time.Now().UTC().Add(-time.Duration(2 * update + 1))
+	updated := time.Now().UTC().Add(time.Duration(-2 * update + 1) * time.Minute)
 	switch true {
-	// is any data more than 5 minutes stale?
+	// is data stale?
 	case fst.PriceUpdated.Before(updated),
 		fst.FeeVotersUpdated.Before(updated),
 		fst.ProducersUpdated.Before(updated),

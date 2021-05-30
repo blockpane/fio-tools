@@ -7,7 +7,7 @@ import (
 	"github.com/go-openapi/runtime/middleware"
 )
 
-func fee(usd bool) middleware.Responder {
+func fee(actionName bool, usd bool) middleware.Responder {
 	if !state.ready() {
 		return &ops.GetFeeServiceUnavailable{
 			Payload: &models.Error{
@@ -18,12 +18,21 @@ func fee(usd bool) middleware.Responder {
 	}
 	payload := &ops.GetFeeOK{Payload: make([]*models.Price, 0)}
 	for i := range state.Fees {
+		ep := state.Fees[i].EndPoint
+		if actionName {
+			feeMapMux.RLock()
+			ep = feeMap[ep]
+			feeMapMux.RUnlock()
+			if ep == "" {
+				ep = state.Fees[i].EndPoint
+			}
+		}
 		price := float64(state.Fees[i].SufAmount) / 1_000_000_000.0
 		if usd {
 			price = price * state.Price
 		}
 		payload.Payload = append(payload.Payload, &models.Price{
-			EndPoint: &state.Fees[i].EndPoint,
+			EndPoint: &ep,
 			Price:    &price,
 		})
 	}
@@ -31,11 +40,19 @@ func fee(usd bool) middleware.Responder {
 }
 
 func Fee(ops.GetFeeParams) middleware.Responder {
-	return fee(false)
+	return fee(false, false)
 }
 
 func FeeUsd(ops.GetFeeUsdParams) middleware.Responder {
-	return fee(true)
+	return fee(false, true)
+}
+
+func FeeByActionName(ops.GetFeeByActionNameParams) middleware.Responder {
+	return fee(true, false)
+}
+
+func FeeByActionNameUsd(ops.GetFeeByActionNameUsdParams) middleware.Responder {
+	return fee(true, true)
 }
 
 func FeeVotesFeevoteProducer(params ops.GetFeeVotesFeevoteProducerParams) middleware.Responder {
@@ -55,8 +72,31 @@ func FeeVotesFeevoteProducer(params ops.GetFeeVotesFeevoteProducerParams) middle
 			},
 		}
 	}
-	// FIXME
-	return middleware.NotImplemented("operation ops.GetFeeVotesProducerUsd has not yet been implemented")
+	payload := make([]*models.Feevote, 0)
+	for i := range state.FeeVotes {
+		if params.Producer == string(state.FeeVotes[i].BlockProducerName) {
+			for _, v := range state.FeeVotes[i].FeeVotes {
+				if v.EndPoint == "" {
+					continue
+				}
+				endpoint := v.EndPoint
+				ts := v.TimeStamp
+				amt := float64(v.Value) / 1_000_000_000.0
+				payload = append(payload, &models.Feevote{
+					EndPoint:  &endpoint,
+					Timestamp: &ts,
+					Value:     &amt,
+				})
+			}
+		}
+	}
+	if len(payload) == 0 {
+		return &ops.GetFeeVotesFeevoteProducerNotFound{Payload: &models.Error{
+			Code:    404,
+			Message: "no votes found",
+		}}
+	}
+	return &ops.GetFeeVotesFeevoteProducerOK{Payload: payload}
 }
 
 func FeeVotesMultiplierProducer(params ops.GetFeeVotesMultiplierProducerParams) middleware.Responder {
@@ -80,6 +120,7 @@ func FeeVotesMultiplierProducer(params ops.GetFeeVotesMultiplierProducerParams) 
 	for i := range state.FeeVoters {
 		if string(state.FeeVoters[i].BlockProducerName) == params.Producer {
 			vote = state.FeeVoters[i].FeeMultiplier
+			ts := state.FeeVoters[i].LastVoteTimestamp
 			if vote == 0 {
 				return &ops.GetFeeVotesMultiplierProducerNotFound{
 					Payload: &models.Error{
@@ -88,7 +129,10 @@ func FeeVotesMultiplierProducer(params ops.GetFeeVotesMultiplierProducerParams) 
 					},
 				}
 			}
-			return &ops.GetFeeVotesMultiplierProducerOK{Payload: &ops.GetFeeVotesMultiplierProducerOKBody{Multiplier: vote}}
+			return &ops.GetFeeVotesMultiplierProducerOK{Payload: &ops.GetFeeVotesMultiplierProducerOKBody{
+				Multiplier: vote,
+				Timestamp: ts,
+			}}
 		}
 	}
 	return &ops.GetFeeVotesMultiplierProducerNotFound{

@@ -63,7 +63,7 @@ func (o *GetFeeUsdOK) WriteResponse(rw http.ResponseWriter, producer runtime.Pro
 // GetFeeUsdServiceUnavailableCode is the HTTP code returned for type GetFeeUsdServiceUnavailable
 const GetFeeUsdServiceUnavailableCode int = 503
 
-/*GetFeeUsdServiceUnavailable Data is stale, has not been updated for more than five minutes
+/*GetFeeUsdServiceUnavailable Data is stale, has not been updated for several minutes
 
 swagger:response getFeeUsdServiceUnavailable
 */

@@ -60,7 +60,7 @@ func (o *GetPriceOK) WriteResponse(rw http.ResponseWriter, producer runtime.Prod
 // GetPriceServiceUnavailableCode is the HTTP code returned for type GetPriceServiceUnavailable
 const GetPriceServiceUnavailableCode int = 503
 
-/*GetPriceServiceUnavailable Data is stale, has not been updated for more than five minutes
+/*GetPriceServiceUnavailable Data is stale, has not been updated for several minutes
 
 swagger:response getPriceServiceUnavailable
 */

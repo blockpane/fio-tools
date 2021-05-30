@@ -16,7 +16,7 @@ import (
 // GetFeeOKCode is the HTTP code returned for type GetFeeOK
 const GetFeeOKCode int = 200
 
-/*GetFeeOK An array of prices for each action in FIO
+/*GetFeeOK An array of prices for each endpoint in FIO
 
 swagger:response getFeeOK
 */
@@ -63,7 +63,7 @@ func (o *GetFeeOK) WriteResponse(rw http.ResponseWriter, producer runtime.Produc
 // GetFeeServiceUnavailableCode is the HTTP code returned for type GetFeeServiceUnavailable
 const GetFeeServiceUnavailableCode int = 503
 
-/*GetFeeServiceUnavailable Data is stale, has not been updated for more than five minutes
+/*GetFeeServiceUnavailable Data is stale, has not been updated for several minutes
 
 swagger:response getFeeServiceUnavailable
 */

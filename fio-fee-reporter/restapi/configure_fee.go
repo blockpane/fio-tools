@@ -37,6 +37,8 @@ func configureAPI(api *operations.FeeAPI) http.Handler {
 
 	api.GetFeeHandler = operations.GetFeeHandlerFunc(ffr.Fee)
 	api.GetFeeUsdHandler = operations.GetFeeUsdHandlerFunc(ffr.FeeUsd)
+	api.GetFeeByActionNameHandler = operations.GetFeeByActionNameHandlerFunc(ffr.FeeByActionName)
+	api.GetFeeByActionNameUsdHandler = operations.GetFeeByActionNameUsdHandlerFunc(ffr.FeeByActionNameUsd)
 	api.GetFeeVotesFeevoteProducerHandler = operations.GetFeeVotesFeevoteProducerHandlerFunc(ffr.FeeVotesFeevoteProducer)
 	api.GetFeeVotesMultiplierProducerHandler = operations.GetFeeVotesMultiplierProducerHandlerFunc(ffr.FeeVotesMultiplierProducer)
 	api.GetFeeVotesProducerHandler = operations.GetFeeVotesProducerHandlerFunc(ffr.FeeVotesProducer)

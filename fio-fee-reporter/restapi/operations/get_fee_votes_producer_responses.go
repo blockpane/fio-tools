@@ -151,7 +151,7 @@ func (o *GetFeeVotesProducerNotFound) WriteResponse(rw http.ResponseWriter, prod
 // GetFeeVotesProducerServiceUnavailableCode is the HTTP code returned for type GetFeeVotesProducerServiceUnavailable
 const GetFeeVotesProducerServiceUnavailableCode int = 503
 
-/*GetFeeVotesProducerServiceUnavailable Data is stale, has not been updated for more than five minutes
+/*GetFeeVotesProducerServiceUnavailable Data is stale, has not been updated for several minutes
 
 swagger:response getFeeVotesProducerServiceUnavailable
 */

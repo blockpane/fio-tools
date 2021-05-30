@@ -19,7 +19,8 @@ var (
 func init() {
 	SwaggerJSON = json.RawMessage([]byte(`{
   "schemes": [
-    "https"
+    "https",
+    "http"
   ],
   "swagger": "2.0",
   "info": {
@@ -27,10 +28,31 @@ func init() {
     "title": "fio-fee-reporter",
     "version": "0.0.1"
   },
-  "host": "fio-fee.blockpane.com",
   "basePath": "/v1",
   "paths": {
     "/fee": {
+      "get": {
+        "description": "list all fees in whole FIO as a float",
+        "responses": {
+          "200": {
+            "description": "An array of prices for each endpoint in FIO",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Price"
+              }
+            }
+          },
+          "503": {
+            "description": "Data is stale, has not been updated for several minutes",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/fee/byActionName": {
       "get": {
         "description": "list all fees in whole FIO as a float",
         "responses": {
@@ -44,7 +66,29 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/fee/byActionName/usd": {
+      "get": {
+        "description": "List all fees in USD",
+        "responses": {
+          "200": {
+            "description": "An array of prices for each action in USD",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Price"
+              }
+            }
+          },
+          "503": {
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -66,7 +110,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -109,7 +153,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -137,6 +181,11 @@ func init() {
                 "multiplier": {
                   "type": "number",
                   "format": "float32"
+                },
+                "timestamp": {
+                  "description": "Unix timestap of when the fee vote was set",
+                  "type": "integer",
+                  "format": "uint64"
                 }
               }
             }
@@ -154,7 +203,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -197,7 +246,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -237,7 +286,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -261,7 +310,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -323,7 +372,8 @@ func init() {
 }`))
 	FlatSwaggerJSON = json.RawMessage([]byte(`{
   "schemes": [
-    "https"
+    "https",
+    "http"
   ],
   "swagger": "2.0",
   "info": {
@@ -331,10 +381,31 @@ func init() {
     "title": "fio-fee-reporter",
     "version": "0.0.1"
   },
-  "host": "fio-fee.blockpane.com",
   "basePath": "/v1",
   "paths": {
     "/fee": {
+      "get": {
+        "description": "list all fees in whole FIO as a float",
+        "responses": {
+          "200": {
+            "description": "An array of prices for each endpoint in FIO",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Price"
+              }
+            }
+          },
+          "503": {
+            "description": "Data is stale, has not been updated for several minutes",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/fee/byActionName": {
       "get": {
         "description": "list all fees in whole FIO as a float",
         "responses": {
@@ -348,7 +419,29 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/fee/byActionName/usd": {
+      "get": {
+        "description": "List all fees in USD",
+        "responses": {
+          "200": {
+            "description": "An array of prices for each action in USD",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Price"
+              }
+            }
+          },
+          "503": {
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -370,7 +463,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -413,7 +506,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -441,6 +534,11 @@ func init() {
                 "multiplier": {
                   "type": "number",
                   "format": "float32"
+                },
+                "timestamp": {
+                  "description": "Unix timestap of when the fee vote was set",
+                  "type": "integer",
+                  "format": "uint64"
                 }
               }
             }
@@ -458,7 +556,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -501,7 +599,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -541,7 +639,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
@@ -565,7 +663,7 @@ func init() {
             }
           },
           "503": {
-            "description": "Data is stale, has not been updated for more than five minutes",
+            "description": "Data is stale, has not been updated for several minutes",
             "schema": {
               "$ref": "#/definitions/Error"
             }
