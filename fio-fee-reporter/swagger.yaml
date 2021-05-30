@@ -32,7 +32,9 @@ paths:
         200:
           description: An array of prices for each action in USD
           schema:
-            $ref: "#/definitions/Price"
+            type: array
+            items:
+              $ref: "#/definitions/Price"
         503:
           description: Data is stale, has not been updated for more than five minutes
           schema:
@@ -50,7 +52,9 @@ paths:
         200:
           description: An array of prices for each action in FIO based on the producer's votes
           schema:
-            $ref: "#/definitions/Price"
+            type: array
+            items:
+              $ref: "#/definitions/Price"
         404:
           description: Did not find a matching producer
           schema:
@@ -190,8 +194,8 @@ definitions:
         type: string
       value:
         description: the fee vote in smallest units of FIO (1,000,000,000 SUF = 1 FIO)
-        type: integer
-        format: uint64
+        type: number
+        format: float64
       timestamp:
         description: Unix timestap of when the fee vote was set
         type: integer

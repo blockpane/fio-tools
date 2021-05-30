@@ -1,4 +1,4 @@
-package main
+package ffr
 
 import (
 	"crypto/rand"
@@ -52,6 +52,12 @@ type feeState struct {
 	votersMux        sync.RWMutex
 	votersBusy       bool
 
+	// Fees holds the contents of the fio.fee::feevoters table
+	Fees        []*fio.FioFee `json:"fees"`
+	FeesUpdated time.Time     `json:"fees_updated"`
+	feesMux     sync.RWMutex
+	feesBusy    bool
+
 	// Producers holds the contents of the eosio::producers table, this is used to map account to the Fio Name.
 	Producers        []*fio.Producer `json:"producers"`
 	ProducersUpdated time.Time       `json:"producers_updated"`
@@ -61,42 +67,51 @@ type feeState struct {
 
 // updateWorker asynchronously fires various functions that update state data
 func (fst *feeState) updateWorker() {
+
+	doUpdate := func() {
+		if !fst.priceBusy {
+			go func() {
+				if e := fst.updatePrice(); e != nil {
+					log.Println("ERROR: could not update price", e)
+				}
+			}()
+		}
+		if !fst.feesBusy {
+			go func() {
+				if e := fst.updateFees(); e != nil {
+					log.Println("ERROR: could not update fees", e)
+				}
+			}()
+		}
+		if !fst.votes2Busy {
+			go func() {
+				if e := fst.updateFeeVotes(); e != nil {
+					log.Println("ERROR: could not update feevotes2", e)
+				}
+			}()
+		}
+		if !fst.votersBusy {
+			go func() {
+				if e := fst.updateFeeVoters(); e != nil {
+					log.Println("ERROR: could not update feevoters", e)
+				}
+			}()
+		}
+		if !fst.prodBusy {
+			go func() {
+				if e := fst.updateProducers(); e != nil {
+					log.Println("ERROR: could not update producers", e)
+				}
+			}()
+		}
+	}
+	doUpdate()
+
 	t := time.NewTicker(time.Duration(update) * time.Minute)
 	for {
 		select {
 		case <-t.C:
-			// DELETEME: debug
-			j, _ := json.MarshalIndent(fst, "", "  ")
-			fmt.Println(string(j))
-
-			if !fst.priceBusy {
-				go func() {
-					if e := fst.updatePrice(); e != nil {
-						log.Println("ERROR: could not update price", e)
-					}
-				}()
-			}
-			if !fst.votes2Busy {
-				go func() {
-					if e := fst.updateFeeVotes(); e != nil {
-						log.Println("ERROR: could not update feevotes2", e)
-					}
-				}()
-			}
-			if !fst.votersBusy {
-				go func() {
-					if e := fst.updateFeeVoters(); e != nil {
-						log.Println("ERROR: could not update feevoters", e)
-					}
-				}()
-			}
-			if !fst.prodBusy {
-				go func() {
-					if e := fst.updateProducers(); e != nil {
-						log.Println("ERROR: could not update producers", e)
-					}
-				}()
-			}
+			doUpdate()
 		}
 	}
 }
@@ -130,6 +145,38 @@ func (fst *feeState) updateFeeVotes() error {
 	}
 	fst.FeeVotes = result
 	fst.FeeVotesUpdated = time.Now().UTC()
+	return nil
+}
+
+// updateFeeVotes fetches the current fiofees table and stores it in state.
+func (fst *feeState) updateFees() error {
+	fst.feesBusy = true
+	defer func() {
+		fst.feesBusy = false
+	}()
+	fst.feesMux.Lock()
+	defer fst.feesMux.Unlock()
+	api := getApi("updateFees", producers)
+	gtr, err := api.GetTableRowsOrder(fio.GetTableRowsOrderRequest{
+		Code:  "fio.fee",
+		Scope: "fio.fee",
+		Table: "fiofees",
+		Limit: 1000,
+		JSON:  true,
+	})
+	if err != nil {
+		return err
+	}
+	result := make([]*fio.FioFee, 0)
+	err = json.Unmarshal(gtr.Rows, &result)
+	if err != nil {
+		return err
+	}
+	if len(result) == 0 {
+		return errors.New("empty query response from updateFees")
+	}
+	fst.Fees = result
+	fst.FeesUpdated = time.Now().UTC()
 	return nil
 }
 
@@ -203,12 +250,13 @@ func (fst *feeState) updateProducers() error {
 
 // ready responds with true if we have data sufficient to provide responses
 func (fst *feeState) ready() bool {
+	updated := time.Now().UTC().Add(-time.Duration(2 * update + 1))
 	switch true {
 	// is any data more than 5 minutes stale?
-	case fst.PriceUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		fst.FeeVotersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		fst.ProducersUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)),
-		fst.FeeVotesUpdated.Before(time.Now().UTC().Add(-5 * time.Minute)):
+	case fst.PriceUpdated.Before(updated),
+		fst.FeeVotersUpdated.Before(updated),
+		fst.ProducersUpdated.Before(updated),
+		fst.FeeVotesUpdated.Before(updated):
 		return false
 	default:
 		return true

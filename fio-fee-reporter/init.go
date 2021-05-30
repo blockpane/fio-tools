@@ -1,7 +1,6 @@
-package main
+package ffr
 
 import (
-	"flag"
 	"github.com/fioprotocol/fio-go"
 	"log"
 	"os"
@@ -38,43 +37,43 @@ var producers = []string{
 }
 
 var (
-	port, update int
-	srvrs        string
-	fst          = &feeState{
+	update int
+	srvrs  string
+	state  = &feeState{
 		FeeVotes:  make([]*fio.FeeVote2, 0),
 		FeeVoters: make([]*fio.FeeVoter, 0),
 		Producers: make([]*fio.Producer, 0),
 	}
 )
 
-func main() {
+func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	options()
 
 	// update state data in the background
-	go fst.updateWorker()
-
-	select {}
+	go state.updateWorker()
 }
 
 // options parses command line flags, or uses env vars for settings.
+// FIXME: flags now handled by go-swagger cmd
 func options() {
-	flag.StringVar(&srvrs, "servers", "", "optional: list of nodeos servers to use, comma seperated (alt env: SERVERS)")
-	flag.IntVar(&port, "p", 8000, "port to listen on for incoming rest requests (alt env: PORT)")
-	flag.IntVar(&update, "update", 1, "update frequency for source data in minutes (alt env: UPDATE")
-	flag.Parse()
+	//flag.StringVar(&srvrs, "servers", "", "optional: list of nodeos servers to use, comma seperated (alt env: SERVERS)")
+	//flag.IntVar(&port, "p", 8000, "port to listen on for incoming rest requests (alt env: PORT)")
+	//flag.IntVar(&update, "update", 1, "update frequency for source data in minutes (alt env: UPDATE")
+	//flag.Parse()
+	update = 5
 
 	switch false {
 	case os.Getenv("SERVERS") == "":
 		srvrs = os.Getenv("SERVERS")
 		fallthrough
-	case os.Getenv("PORT") == "":
-		p, e := strconv.ParseInt(os.Getenv("PORT"), 10, 32)
-		if e != nil {
-			log.Fatal("Invalid PORT env var:", e)
-		}
-		port = int(p)
-		fallthrough
+	//case os.Getenv("PORT") == "":
+	//	p, e := strconv.ParseInt(os.Getenv("PORT"), 10, 32)
+	//	if e != nil {
+	//		log.Fatal("Invalid PORT env var:", e)
+	//	}
+	//	port = int(p)
+	//	fallthrough
 	case os.Getenv("UPDATE") == "":
 		u, e := strconv.ParseInt(os.Getenv("UPDATE"), 10, 32)
 		if e != nil {
