@@ -266,7 +266,7 @@ func getEligible(api *fio.API) ([]string, error) {
 		if !found || err != nil {
 			continue
 		}
-		if !func () bool {
+		if !func() bool {
 			for _, address := range reg.FioAddresses {
 				if string(p.FioAddress) == (address.FioAddress) {
 					t, e := time.Parse("2006-01-02T15:04:05", address.Expiration)
@@ -294,20 +294,20 @@ func getEligible(api *fio.API) ([]string, error) {
 	eligible := make([]string, 0)
 	prods := make([]string, 0)
 	if Allowed != "" {
-		f, err := os.Open(Allowed)
-		if err != nil {
+		f, e := os.Open(Allowed)
+		if e != nil {
 			if V {
-				log.Println(err)
+				log.Println(e)
 			}
-			return nil, err
+			return nil, e
 		}
 		defer f.Close()
-		fb, err := ioutil.ReadAll(f)
-		if err != nil {
+		fb, e := ioutil.ReadAll(f)
+		if e != nil {
 			if V {
-				log.Println(err)
+				log.Println(e)
 			}
-			return nil, err
+			return nil, e
 		}
 		prods = strings.Split(string(fb), "\n")
 		rand.Seed(time.Now().UnixNano())
@@ -347,7 +347,7 @@ func getEligible(api *fio.API) ([]string, error) {
 	return eligible, nil
 }
 
-// only what we need.
+// ProducerCompact trims the response to only what we need.
 type ProducerCompact struct {
 	FioAddress        string       `json:"fio_address"`
 	TotalVotes        string       `json:"total_votes"`

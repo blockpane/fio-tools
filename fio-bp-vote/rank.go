@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	thirty uint32 = 30 * 24 * 60 * 120
-	one    uint32 = 24 * 60 * 120
+	thirty  uint32 = 30 * 24 * 60 * 120
+	one     uint32 = 24 * 60 * 120
+	highCpu uint64 = 7_000
 )
 
 func RankProducers(eligible []string, cpuRank map[string]int, api *fio.API) ([]string, error) {
@@ -198,7 +199,7 @@ func (bp *BpRank) getBpJson(api *fio.API) error {
 	u, _ := url.Parse(bpj.BpJsonUrl)
 	origin := u.Scheme + "://" + u.Host
 	if u.Port() != "" {
-		origin += ":"+u.Port()
+		origin += ":" + u.Port()
 	}
 	req.Header.Set("Origin", origin)
 	//if origin == "https://blockpane.com" {
@@ -405,7 +406,7 @@ func CpuRanking(api *fio.API) (map[string]int, error) {
 			return averages[sorted[i]] > averages[sorted[j]]
 		})
 		p := message.NewPrinter(language.AmericanEnglish)
-		p.Printf("average CPU µs by producer, blocks %d through %d:\n", through, gi.HeadBlockNum)
+		log.Printf("average CPU µs by producer, blocks %d through %d:\n", through, gi.HeadBlockNum)
 		for _, bp := range sorted {
 			p.Printf("    %-25s  (%s) %20d µs\n", prodTable[bp], bp, averages[bp])
 		}
@@ -413,7 +414,7 @@ func CpuRanking(api *fio.API) (map[string]int, error) {
 	scores := make(map[string]int)
 	for bp, avg := range averages {
 		scores[prodTable[bp]] = 0
-		if avg > 5_000 {
+		if avg > highCpu {
 			scores[prodTable[bp]] -= 3 * (int(avg-5000) / 1000)
 		}
 	}

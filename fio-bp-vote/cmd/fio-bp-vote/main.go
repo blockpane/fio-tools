@@ -55,8 +55,8 @@ func main() {
 	func() {
 		if vs, err := os.Open(".voter-missed"); err == nil && vs != nil {
 			defer vs.Close()
-			j, err := ioutil.ReadAll(vs)
-			if err != nil {
+			j, e := ioutil.ReadAll(vs)
+			if e != nil {
 				return
 			}
 			_ = json.Unmarshal(j, &voter.Missed)
@@ -68,8 +68,8 @@ func main() {
 		}
 		if lv, err := os.Open(".last-vote"); err == nil && lv != nil {
 			defer lv.Close()
-			b, err := ioutil.ReadAll(lv)
-			if err != nil {
+			b, e := ioutil.ReadAll(lv)
+			if e != nil {
 				return
 			}
 			voter.LastVote = string(b)
@@ -98,7 +98,7 @@ func main() {
 		cpuRank = make(map[string]int)
 		twoDays = append(twoDays[1:], m)
 		for _, hour := range twoDays {
-			if hour != nil && len(hour) > 0 {
+			if len(hour) > 0 {
 				for k, v := range hour {
 					if cpuRank[k] > v {
 						cpuRank[k] = v
@@ -157,7 +157,7 @@ func main() {
 			if voter.V {
 				log.Println("ranking producers CPU performance")
 			}
-			hourRank, err := voter.CpuRanking(api)
+			hourRank, err = voter.CpuRanking(api)
 			if err != nil || hourRank == nil {
 				log.Println("invalid cpu rank:", err)
 				mux.Unlock()
