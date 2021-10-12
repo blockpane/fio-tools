@@ -249,7 +249,13 @@ Example of json input format for '--fees' flag / JSON env var:
 			}
 			// throw in a quick burnexpired for good measure, this won't even be possible until after late March 2021
 			// when addresses start expiring.
-			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpired{}))
+			var offset int64
+			offset, err = api.GetExpiredOffset(false)
+			if err != nil {
+				log.Println("Get expired domain offset:", err)
+				return
+			}
+			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpiredRange{ Offset: offset, Limit: 15}))
 			if err != nil {
 				log.Println("Burn expired failed (can safely ignore): ", err.Error())
 			}
