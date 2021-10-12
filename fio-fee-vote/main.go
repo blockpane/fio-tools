@@ -103,26 +103,25 @@ Example of json input format for '--fees' flag / JSON env var:
 		}
 	}
 
-	switch "" {
-	case a:
+	if a == "" {
 		a = os.Getenv("ACTOR")
-		fallthrough
-	case p:
+	}
+	if p == "" {
 		p = os.Getenv("PERM")
-		fallthrough
-	case wif:
+	}
+	if wif == "" {
 		wif = os.Getenv("WIF")
-		fallthrough
-	case nodeos:
+	}
+	if nodeos == "" {
 		nodeos = os.Getenv("URL")
-		fallthrough
-	case sTarget:
+	}
+	if sTarget == "" {
 		sTarget = os.Getenv("TARGET")
-		fallthrough
-	case myName:
+	}
+	if myName == "" {
 		myName = os.Getenv("NAME")
-		fallthrough
-	case customFees:
+	}
+	if customFees == "" {
 		customFees = os.Getenv("JSON")
 	}
 
@@ -220,7 +219,7 @@ Example of json input format for '--fees' flag / JSON env var:
 				_, err = api.SignPushActionsWithOpts([]*eos.Action{fio.NewActionWithPermission("fio.fee", "setfeevote", actor, string(perm), act).ToEos()}, &opt.TxOptions)
 			}
 			if err != nil {
-				log.Println(err)
+				log.Println(detailedErr(err))
 				log.Println("Could not update base fees, has it been an hour? Continuing anyway")
 			} else {
 				log.Println("feevote updated")
@@ -252,12 +251,12 @@ Example of json input format for '--fees' flag / JSON env var:
 			var offset int64
 			offset, err = api.GetExpiredOffset(false)
 			if err != nil {
-				log.Println("Get expired domain offset:", err)
+				log.Println("Get expired domain offset:", detailedErr(err))
 				return
 			}
-			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpiredRange{ Offset: offset, Limit: 15}))
+			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpiredRange{Offset: offset, Limit: 5}))
 			if err != nil {
-				log.Println("Burn expired failed (can safely ignore): ", err.Error())
+				log.Println("Burn expired failed (can safely ignore): ", detailedErr(err))
 			}
 		}
 		// call the maintenance calls on the way out everytime, even if we didn't set fees/multiplier.
@@ -310,7 +309,7 @@ Example of json input format for '--fees' flag / JSON env var:
 			default:
 				_, err = api.SignPushActions(act)
 				if err != nil {
-					log.Println("Setting fees failed:", err)
+					log.Println("Setting fees failed:", detailedErr(err))
 					// don't bail, try the ComputeFees call on the way out
 				}
 			}
@@ -336,14 +335,14 @@ Example of json input format for '--fees' flag / JSON env var:
 		})
 		_, err = api.SignPushActions(act)
 		if err != nil {
-			log.Println(err)
+			log.Println(detailedErr(err))
 		}
 		act = fio.NewActionWithPermission("fio.treasury", "tpidclaim", actor, string(perm), fio.PayTpidRewards{
 			Actor: actor,
 		})
 		_, err = api.SignPushActions(act)
 		if err != nil {
-			log.Println(err)
+			log.Println(detailedErr(err))
 		}
 	}
 
@@ -371,7 +370,7 @@ Example of json input format for '--fees' flag / JSON env var:
 				// to timing / flash attacks.
 				time.Sleep(time.Duration(intRand(10)) * time.Minute)
 				if err = setMultiplier(); err != nil {
-					log.Println(err)
+					log.Println(detailedErr(err))
 				}
 			}()
 		}
@@ -381,6 +380,7 @@ Example of json input format for '--fees' flag / JSON env var:
 func defaultFee() []*fio.FeeValue {
 	defaults := []*fio.FeeValue{
 		{EndPoint: "add_bundled_transactions", Value: 2000000000},
+		{EndPoint: "add_nft", Value: 30000000},
 		{EndPoint: "add_pub_address", Value: 30000000},
 		{EndPoint: "add_to_whitelist", Value: 30000000},
 		{EndPoint: "auth_delete", Value: 20000000},
@@ -402,8 +402,10 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "register_producer", Value: 10000000000},
 		{EndPoint: "register_proxy", Value: 1000000000},
 		{EndPoint: "reject_funds_request", Value: 30000000},
+		{EndPoint: "remove_all_nfts", Value: 60000000},
 		{EndPoint: "remove_all_pub_addresses", Value: 60000000},
 		{EndPoint: "remove_from_whitelist", Value: 30000000},
+		{EndPoint: "remove_nft", Value: 60000000},
 		{EndPoint: "remove_pub_address", Value: 60000000},
 		{EndPoint: "renew_fio_address", Value: 2000000000},
 		{EndPoint: "renew_fio_domain", Value: 40000000000},
@@ -620,7 +622,7 @@ func printAction(v ...interface{}) {
 	log.Println("would have sent transaction:")
 	j, err := json.MarshalIndent(v, "                    ", "  ")
 	if err != nil {
-		log.Println(err)
+		log.Println(detailedErr(err))
 	}
 	fmt.Println(string(j))
 }
@@ -634,5 +636,14 @@ func intRand(i int) int {
 		panic(err)
 	}
 	// strip possible signed bit, cast, and return modulus
-	return int(binary.LittleEndian.Uint32(b) >> 1) % i
+	return int(binary.LittleEndian.Uint32(b)>>1) % i
+}
+
+func detailedErr(err error) string {
+	switch err.(type) {
+	case eos.APIError:
+		return fmt.Sprintf("%s - %+v", err.Error(), err.(eos.APIError).ErrorStruct)
+	default:
+		return err.Error()
+	}
 }
