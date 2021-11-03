@@ -248,16 +248,17 @@ Example of json input format for '--fees' flag / JSON env var:
 			}
 			// throw in a quick burnexpired for good measure, this won't even be possible until after late March 2021
 			// when addresses start expiring.
-			var offset int64
-			offset, err = api.GetExpiredOffset(false)
-			if err != nil {
-				log.Println("Get expired domain offset:", detailedErr(err))
-				return
-			}
-			_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpiredRange{Offset: offset, Limit: 5}))
-			if err != nil {
-				log.Println("Burn expired failed (can safely ignore): ", detailedErr(err))
-			}
+			//FIXME: need to account for existing addresses before trying to burn: waiting for upstream fix in fio-go
+			//var offset int64
+			//offset, err = api.GetExpiredOffset(false)
+			//if err != nil {
+			//	log.Println("Get expired domain offset:", detailedErr(err))
+			//	return
+			//}
+			//_, err = api.SignPushActions(fio.NewActionWithPermission("fio.address", "burnexpired", actor, string(perm), fio.BurnExpiredRange{Offset: offset-1, Limit: 5}))
+			//if err != nil {
+			//	log.Println("Burn expired failed (can safely ignore): ", detailedErr(err))
+			//}
 		}
 		// call the maintenance calls on the way out everytime, even if we didn't set fees/multiplier.
 		defer maint()
