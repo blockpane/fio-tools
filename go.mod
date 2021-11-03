@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.20.0
 	github.com/blockpane/fio-extras v0.0.0-20201115054148-f4abad805e54
 	github.com/ethereum/go-ethereum v1.9.25
-	github.com/fioprotocol/fio-go v1.0.5-0.20211012230154-3e380696f48b
+	github.com/fioprotocol/fio-go v1.0.6-0.20211019173957-98cef1daa416
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/hpcloud/tail v1.0.0
 	github.com/mr-tron/base58 v1.2.0
