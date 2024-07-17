@@ -400,6 +400,7 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "record_obt_data", Value: 60000000},
 		{EndPoint: "register_fio_address", Value: 1000000000},
 		{EndPoint: "register_fio_domain", Value: 100000000000},
+		{EndPoint: "register_fio_domain_address", Value: 101000000000},
 		{EndPoint: "register_producer", Value: 10000000000},
 		{EndPoint: "register_proxy", Value: 1000000000},
 		{EndPoint: "reject_funds_request", Value: 30000000},
