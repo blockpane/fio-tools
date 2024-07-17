@@ -380,7 +380,7 @@ Example of json input format for '--fees' flag / JSON env var:
 
 func defaultFee() []*fio.FeeValue {
 	defaults := []*fio.FeeValue{
-		{EndPoint: "add_bundled_transactions", Value: 2000000000},
+		{EndPoint: "add_bundled_transactions", Value: 1000000000},
 		{EndPoint: "add_nft", Value: 30000000},
 		{EndPoint: "add_pub_address", Value: 30000000},
 		{EndPoint: "add_to_whitelist", Value: 30000000},
@@ -398,8 +398,8 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "new_funds_request", Value: 60000000},
 		{EndPoint: "proxy_vote", Value: 30000000},
 		{EndPoint: "record_obt_data", Value: 60000000},
-		{EndPoint: "register_fio_address", Value: 2000000000},
-		{EndPoint: "register_fio_domain", Value: 40000000000},
+		{EndPoint: "register_fio_address", Value: 1000000000},
+		{EndPoint: "register_fio_domain", Value: 100000000000},
 		{EndPoint: "register_producer", Value: 10000000000},
 		{EndPoint: "register_proxy", Value: 1000000000},
 		{EndPoint: "reject_funds_request", Value: 30000000},
@@ -408,8 +408,8 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "remove_from_whitelist", Value: 30000000},
 		{EndPoint: "remove_nft", Value: 60000000},
 		{EndPoint: "remove_pub_address", Value: 60000000},
-		{EndPoint: "renew_fio_address", Value: 2000000000},
-		{EndPoint: "renew_fio_domain", Value: 40000000000},
+		{EndPoint: "renew_fio_address", Value: 1000000000},
+		{EndPoint: "renew_fio_domain", Value: 100000000000},
 		{EndPoint: "set_fio_domain_public", Value: 30000000},
 		{EndPoint: "submit_bundled_transaction", Value: 30000000},
 		{EndPoint: "submit_fee_multiplier", Value: 10000000}, // I'm overriding the default here, this should be cheap.
