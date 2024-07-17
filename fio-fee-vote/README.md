@@ -4,7 +4,7 @@ This is a utility for setting FIO fees. It has the following features:
 
 1. Looks up current prices from CoinGecko, and averages the USDT and USDC trading pairs from all listed exchanges.
 1. Sets base fee votes if they differ from requested (see default feevote values below.)
-1. Sets fee multiplier to desired cost of regaddress in USD (default $2.00)
+1. Sets fee multiplier to desired cost of regaddress in USD (default $1.00)
 1. Can run from cron (use -x), as a daemon (default 2 hour loop), or from AWS Lambda (auto detects if running in Lambda)
 1. Will not update prices if the change is small (.15 or less change in multiplier), or if the multiplier changes by more than 25%
 1. When running as a daemon, will add a random delay between runs to reduce predictability.
@@ -13,22 +13,31 @@ This is a utility for setting FIO fees. It has the following features:
 1. Supports using delegated permissions (requires: fio.fee::setfeevote, fio.fee::setfeemultiplier, and fio.fee::computefees)
 
 ```
-Usage of feevoter
   -actor string
-        optional: account to use for delegated permission, alternate: $ACTOR env var
+    	optional: account to use for delegated permission, alternate: ACTOR env var
+  -claim
+    	optional: perform tpidclaim and bpclaim each run, alternate: CLAIM env var
+  -example
+    	print out the default fees that fio-fee-vote would use and exit.
   -fees string
-        optional: JSON file for overriding default fee votes, alternate: $JSON env var
+    	optional: JSON file for overriding default fee votes, alternate: JSON env var
   -frequency int
-        optional: hours to wait between runs (does not apply to AWS Lambda) (default 2)
+    	optional: hours to wait between runs (does not apply to AWS Lambda), alternate FREQ env var (default 2)
+  -name string
+    	optional: FIO name to be used when performing bpclaim and tpidclaim (required when -claim=true), alternate: NAME env var
   -permission string
-        optional: permission to use for delegated permission, alternate: $PERM env var
+    	optional: permission to use for delegated permission, alternate: PERM env var
+  -simulate
+    	optional: do not send any transactions, only print what would have been done, alternate: SIMULATE env var
+  -skip
+    	optional: skip feevote (only do feemult votes) alternate: SKIP env var
   -target string
-        optional: target price of regaddress in USDC, alternate: $TARGET env var (default "2.0")
+    	optional: target price of regaddress in USDC, alternate: TARGET env var (default "1.0")
   -url string
-        required: nodeos api url, alternate: $URL env var
+    	required: nodeos api url, alternate: URL env var
   -wif string
-        required: private key, alternate: $WIF env var
-  -x    optional: exit after running once (does not apply to AWS Lambda,) use for running from cron
+    	required: private key, alternate: WIF env var
+  -x	optional: exit after running once (does not apply to AWS Lambda,) use for running from cron
 ```
 
 Here are the default fee vote values:
@@ -37,6 +46,14 @@ _note: the default fee for setfeemultiplier has been overridden to ᵮ0.1 to mak
 
 ```
 [
+  {
+    "end_point": "add_bundled_transactions",
+    "value": 1000000000
+  },
+  {
+    "end_point": "add_nft",
+    "value": 30000000
+  },
   {
     "end_point": "add_pub_address",
     "value": 30000000
@@ -103,11 +120,15 @@ _note: the default fee for setfeemultiplier has been overridden to ᵮ0.1 to mak
   },
   {
     "end_point": "register_fio_address",
-    "value": 2000000000
+    "value": 1000000000
   },
   {
     "end_point": "register_fio_domain",
-    "value": 40000000000
+    "value": 100000000000
+  },
+  {
+    "end_point": "register_fio_domain_address",
+    "value": 101000000000
   },
   {
     "end_point": "register_producer",
@@ -122,6 +143,10 @@ _note: the default fee for setfeemultiplier has been overridden to ᵮ0.1 to mak
     "value": 30000000
   },
   {
+    "end_point": "remove_all_nfts",
+    "value": 60000000
+  },
+  {
     "end_point": "remove_all_pub_addresses",
     "value": 60000000
   },
@@ -130,16 +155,20 @@ _note: the default fee for setfeemultiplier has been overridden to ᵮ0.1 to mak
     "value": 30000000
   },
   {
+    "end_point": "remove_nft",
+    "value": 60000000
+  },
+  {
     "end_point": "remove_pub_address",
     "value": 60000000
   },
   {
     "end_point": "renew_fio_address",
-    "value": 2000000000
+    "value": 1000000000
   },
   {
     "end_point": "renew_fio_domain",
-    "value": 40000000000
+    "value": 100000000000
   },
   {
     "end_point": "set_fio_domain_public",
@@ -163,6 +192,10 @@ _note: the default fee for setfeemultiplier has been overridden to ᵮ0.1 to mak
   },
   {
     "end_point": "transfer_fio_domain",
+    "value": 100000000
+  },
+  {
+    "end_point": "transfer_locked_tokens",
     "value": 100000000
   },
   {
