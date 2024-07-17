@@ -44,7 +44,7 @@ func handler() error {
 	flag.StringVar(&p, "permission", "", "optional: permission to use for delegated permission, alternate: PERM env var")
 	flag.StringVar(&wif, "wif", "", "required: private key, alternate: WIF env var")
 	flag.StringVar(&nodeos, "url", "", "required: nodeos api url, alternate: URL env var")
-	flag.StringVar(&sTarget, "target", "2.0", "optional: target price of regaddress in USDC, alternate: TARGET env var")
+	flag.StringVar(&sTarget, "target", "1.0", "optional: target price of regaddress in USDC, alternate: TARGET env var")
 	flag.StringVar(&customFees, "fees", "", "optional: JSON file for overriding default fee votes, alternate: JSON env var")
 	flag.IntVar(&frequency, "frequency", 2, "optional: hours to wait between runs (does not apply to AWS Lambda), alternate FREQ env var")
 	flag.BoolVar(&once, "x", false, "optional: exit after running once (does not apply to AWS Lambda,) use for running from cron")
@@ -147,7 +147,7 @@ Example of json input format for '--fees' flag / JSON env var:
 		perm = "active"
 		fallthrough
 	case sTarget:
-		sTarget = "2.0"
+		sTarget = "1.0"
 	}
 
 	target, err := strconv.ParseFloat(sTarget, 64)
@@ -380,7 +380,7 @@ Example of json input format for '--fees' flag / JSON env var:
 
 func defaultFee() []*fio.FeeValue {
 	defaults := []*fio.FeeValue{
-		{EndPoint: "add_bundled_transactions", Value: 2000000000},
+		{EndPoint: "add_bundled_transactions", Value: 1000000000},
 		{EndPoint: "add_nft", Value: 30000000},
 		{EndPoint: "add_pub_address", Value: 30000000},
 		{EndPoint: "add_to_whitelist", Value: 30000000},
@@ -398,8 +398,9 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "new_funds_request", Value: 60000000},
 		{EndPoint: "proxy_vote", Value: 30000000},
 		{EndPoint: "record_obt_data", Value: 60000000},
-		{EndPoint: "register_fio_address", Value: 2000000000},
-		{EndPoint: "register_fio_domain", Value: 40000000000},
+		{EndPoint: "register_fio_address", Value: 1000000000},
+		{EndPoint: "register_fio_domain", Value: 100000000000},
+		{EndPoint: "register_fio_domain_address", Value: 101000000000},
 		{EndPoint: "register_producer", Value: 10000000000},
 		{EndPoint: "register_proxy", Value: 1000000000},
 		{EndPoint: "reject_funds_request", Value: 30000000},
@@ -408,8 +409,8 @@ func defaultFee() []*fio.FeeValue {
 		{EndPoint: "remove_from_whitelist", Value: 30000000},
 		{EndPoint: "remove_nft", Value: 60000000},
 		{EndPoint: "remove_pub_address", Value: 60000000},
-		{EndPoint: "renew_fio_address", Value: 2000000000},
-		{EndPoint: "renew_fio_domain", Value: 40000000000},
+		{EndPoint: "renew_fio_address", Value: 1000000000},
+		{EndPoint: "renew_fio_domain", Value: 100000000000},
 		{EndPoint: "set_fio_domain_public", Value: 30000000},
 		{EndPoint: "submit_bundled_transaction", Value: 30000000},
 		{EndPoint: "submit_fee_multiplier", Value: 10000000}, // I'm overriding the default here, this should be cheap.
